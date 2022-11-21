@@ -157,17 +157,17 @@ def get_args():
     # arg("--xyz-cpt-fg", help="overlay colour above CPT max, below min if invert")
     # arg("--xyz-grid", help="display as grid instead of points", action="store_true")
     # arg("--xyz-grid-automask", help="crop area further than dist from points eg: 8k")
-    # arg(
-    #     "--xyz-grid-contours",
-    #     help="add contour lines from CPT increments",
-    #     action="store_true",
-    # )
+    arg(
+        "--grid-contours",
+        help="add contour lines from CPT increments",
+        action="store_true",
+    )
     # arg(
     #     "--xyz-grid-contours-inc",
     #     help="add contour lines with this increment",
     #     type=float,
     # )
-    # arg("--xyz-grid-type", help="interpolation program to use", default="surface")
+    arg("--grid-surface", help="interpolated grid surface", action="store_true")
     # arg(
     #     "--xyz-grid-search",
     #     help="search radius for interpolation eg: 5k (only m|s units for surface)",
@@ -229,77 +229,89 @@ if __name__ == "__main__":
 
     im='PGV'
 
+    #TODO: should select relevant component
+    ims = list(ims_df.columns)[1:] #[1:] to remove component column
+    pgv_data = ims_df.join(stations, how='right')[['lon', 'lat']+ims]  # joining 2 dataframes on index "station" name.
+
+    for im in ims:
+        if args.grid_surface:
+            pgv_data = pgv_data.fillna(0)
+            pgv_array = pgv_data[['lon', 'lat', im]].to_numpy()
+
+            triFn = Triangulation(pgv_array[:, 0], pgv_array[:, 1])
+            linTriFn = LinearTriInterpolator(triFn, pgv_array[:, 2])
+            rasterRes = 0.01
+            xCoords = np.arange(pgv_array[:, 0].min(), pgv_array[:, 0].max() + rasterRes, rasterRes)
+            yCoords = np.arange(pgv_array[:, 1].min(), pgv_array[:, 1].max() + rasterRes, rasterRes)
+            print(xCoords.shape)
+            print(yCoords.shape)
+            zCoords = np.zeros([yCoords.shape[0], xCoords.shape[0]])
+            # loop among each cell in the raster extension
+            for indexX, x in np.ndenumerate(xCoords):
+                for indexY, y in np.ndenumerate(yCoords):
+                    tempZ = linTriFn(x, y)
+                    # filtering masked values
+                    if tempZ == tempZ:
+                        zCoords[indexY, indexX] = tempZ
+                    else:
+                        zCoords[indexY, indexX] = np.nan
+
+            # preliminary representation of the interpolated values
+            # plt.imshow(zCoords)
+
+            transform = Affine.translation(xCoords[0] - rasterRes / 2, yCoords[0] - rasterRes / 2) * Affine.scale(rasterRes,
+                                                                                                                  rasterRes)
+
+            triInterpRaster = rasterio.open(f'triangleInterpolation_{im}.tif',
+                                            'w',
+                                            driver='GTiff',
+                                            height=zCoords.shape[0],
+                                            width=zCoords.shape[1],
+                                            count=1,
+                                            dtype=zCoords.dtype,
+                                            # crs='+proj=latlong',
+                                            crs=rasterCrs.data,
+                                            transform=transform,
+                                            )
+
+            triInterpRaster.write(zCoords, 1)
+            triInterpRaster.close()
+            type(triInterpRaster)
+        else:
+            pgv_data = pgv_data.loc[pgv_data[im].notna()]
 
 
-    pgv_data = ims_df.join(stations, how='right')[['lon', 'lat', im]]  # joining 2 dataframes on index "station" name
-    pgv_data = pgv_data.fillna(0)
 
-    pgv_array = pgv_data[['lon', 'lat', 'PGV']].to_numpy()
-
-    triFn = Triangulation(pgv_array[:, 0], pgv_array[:, 1])
-    linTriFn = LinearTriInterpolator(triFn, pgv_array[:, 2])
-    rasterRes = 0.01
-    xCoords = np.arange(pgv_array[:, 0].min(), pgv_array[:, 0].max() + rasterRes, rasterRes)
-    yCoords = np.arange(pgv_array[:, 1].min(), pgv_array[:, 1].max() + rasterRes, rasterRes)
-    print(xCoords.shape)
-    print(yCoords.shape)
-    zCoords = np.zeros([yCoords.shape[0], xCoords.shape[0]])
-    # loop among each cell in the raster extension
-    for indexX, x in np.ndenumerate(xCoords):
-        for indexY, y in np.ndenumerate(yCoords):
-            tempZ = linTriFn(x, y)
-            # filtering masked values
-            if tempZ == tempZ:
-                zCoords[indexY, indexX] = tempZ
-            else:
-                zCoords[indexY, indexX] = np.nan
-
-    # preliminary representation of the interpolated values
-    #plt.imshow(zCoords)
-
-    transform = Affine.translation(xCoords[0] - rasterRes / 2, yCoords[0] - rasterRes / 2) * Affine.scale(rasterRes,
-                                                                                                          rasterRes)
-
-    triInterpRaster = rasterio.open('triangleInterpolation.tif',
-                                    'w',
-                                    driver='GTiff',
-                                    height=zCoords.shape[0],
-                                    width=zCoords.shape[1],
-                                    count=1,
-                                    dtype=zCoords.dtype,
-                                    # crs='+proj=latlong',
-                                    crs=rasterCrs.data,
-                                    transform=transform,
-                                    )
-
-    triInterpRaster.write(zCoords, 1)
-    triInterpRaster.close()
-    type(triInterpRaster)
-
-
-    geometry = [Point(xy) for xy in zip(stations["lon"], stations["lat"])]
+        geometry = [Point(xy) for xy in zip(pgv_data["lon"], pgv_data["lat"])]
 
 
 
-    geodata = gpd.GeoDataFrame(stations, crs={"init":rasterCrs.to_string()}, geometry=geometry)
+    #    geodata = gpd.GeoDataFrame(stations, crs={"init":rasterCrs.to_string()}, geometry=geometry)
 
-    grid_surface = rioxarray.open_rasterio('triangleInterpolation.tif', masked=True)
-    type(grid_surface)
-    coastlines_polygon = gpd.read_file('nz_coastlines/nz-coastlines-topo-150k_polygon.shp')
-    clipped = grid_surface.rio.clip(coastlines_polygon.geometry.values, rasterCrs.to_string(), drop=False)
+        fig, ax = plt.subplots(figsize=(14, 14))
 
-    fig, ax = plt.subplots(figsize=(14, 14))
+        if args.grid_surface:
 
-    clipped[0].plot.contour(ax=ax, colors=['black'], linewidths=[0.3])  # draw contour
-    clipped.plot(ax=ax, cmap="CMRmap_r", alpha=0.7)  # render clipped surface
-    # geodata2.plot(im,ax=ax, legend=True, markersize=1, cmap="jet"); # draw points
-    # Download map from online
-    cx.add_basemap(ax, crs=rasterCrs.to_string(), source=cx.providers.Stamen.TerrainBackground)  # add basemap
+            grid_surface = rioxarray.open_rasterio(f'triangleInterpolation_{im}.tif', masked=True)
 
-    ax.set_xlabel('Longitude', fontsize=10)
-    ax.set_ylabel('Latitude', fontsize='medium')
-    plt.title("PGV at stations", fontsize=12)
-#    plt.show()
+            coastlines_polygon = gpd.read_file('nz_coastlines/nz-coastlines-topo-150k_polygon.shp')
+            clipped = grid_surface.rio.clip(coastlines_polygon.geometry.values, rasterCrs.to_string(), drop=False)
+            if args.grid_contours:
+                clipped[0].plot.contour(ax=ax, colors=['black'], linewidths=[0.3])  # draw contour
+            clipped.plot(ax=ax, cmap="CMRmap_r", alpha=0.7)  # render clipped surface
+        else:
+            geodata = gpd.GeoDataFrame(pgv_data, crs={"init": rasterCrs.to_string()}, geometry=geometry)
+            geodata.plot(im, ax=ax, legend=True, markersize=1, cmap="CMRmap_r")  # draw points
 
-    fig.savefig(out_dir/f"{basename}_{im}.png")
+
+        # Download map from online
+        cx.add_basemap(ax, crs=rasterCrs.to_string(), source=cx.providers.Stamen.TerrainBackground)  # add basemap
+
+        ax.set_xlabel('Longitude', fontsize=10)
+        ax.set_ylabel('Latitude', fontsize='medium')
+        plt.title(f"{im} at stations", fontsize=12)
+    #    plt.show()
+
+        im_p = im.replace(".","p")
+        fig.savefig(out_dir/f"{basename}_{im_p}.png")
 
