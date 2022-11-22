@@ -218,8 +218,8 @@ def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True):
     rasterRes = 0.01
     xCoords = np.arange(pgv_array[:, 0].min(), pgv_array[:, 0].max() + rasterRes, rasterRes)
     yCoords = np.arange(pgv_array[:, 1].min(), pgv_array[:, 1].max() + rasterRes, rasterRes)
-    print(xCoords.shape)
-    print(yCoords.shape)
+    #print(xCoords.shape)
+    #print(yCoords.shape)
     zCoords = np.zeros([yCoords.shape[0], xCoords.shape[0]])
     # loop among each cell in the raster extension
     for indexX, x in np.ndenumerate(xCoords):
@@ -251,16 +251,18 @@ def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True):
     triInterpRaster.close()
 
 
-def plot_property(xyz, prop_name, crs, clip_with, grid_surface=True, grid_contours=True, basemap=True,
+def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, grid_surface=True, grid_contours=True, basemap=True,
                   local_basemap="NZ10.tif",
                   cmap="CMRmap_r",
                   interp_overwrite=True):
+
+    #print(f"{prop_name} {crs} {clip_with} {grid_surface} {grid_contours} {basemap} {local_basemap}")
     if grid_surface:
         xyz = xyz.fillna(0)
         pgv_array = xyz[['lon', 'lat', prop_name]].to_numpy()
 
         surface_tiff = f'triangleInterpolation_{prop_name}.tif'
-        triangle_interpolation(pgv_array, surface_tiff, rasterCrs.data, overwrite=interp_overwrite)
+        triangle_interpolation(pgv_array, surface_tiff,{"init":crs}, overwrite=interp_overwrite)
     else:
         xyz = xyz.loc[xyz[prop_name].notna()]
 
@@ -280,7 +282,7 @@ def plot_property(xyz, prop_name, crs, clip_with, grid_surface=True, grid_contou
         clipped.plot(ax=ax, cmap=cmap, alpha=0.7)  # render clipped surface
     else:
         geodata = gpd.GeoDataFrame(xyz, crs={"init": crs}, geometry=geometry)
-        geodata.plot(im, ax=ax, legend=True, markersize=1, cmap=cmap)  # draw points
+        geodata.plot(prop_name, ax=ax, legend=True, markersize=1, cmap=cmap)  # draw points
 
     if basemap:
         # add basemap
@@ -299,7 +301,7 @@ def plot_property(xyz, prop_name, crs, clip_with, grid_surface=True, grid_contou
     #    plt.show()
 
     prop_name_p = prop_name.replace(".", "p")
-    fig.savefig(out_dir / f"{basename}_{prop_name_p}.png")
+    fig.savefig(outdir / f"{prefix}_{prop_name_p}.png")
     plt.close(fig)
 
 
@@ -327,9 +329,13 @@ if __name__ == "__main__":
     # for im in ims:
     #
     #     plot_property(xyz_df, im, rasterCrs.to_string(),coastlines_polygon.geometry.values,
-    #                   grid_surface=args.grid_surface, grid_contours=args.grid_contours)
+    #                   out_dir, basename, grid_surface=args.grid_surface, grid_contours=args.grid_contours)
+
+    print(args.nproc)
+    pfn = partial(plot_property, xyz_df, crs=rasterCrs.to_string(), clip_with=coastlines_polygon.geometry.values,
+                  outdir=out_dir, prefix=basename, grid_surface=args.grid_surface, grid_contours=args.grid_contours)
 
     with Pool(args.nproc) as pool:
-        pfn = partial(plot_property, xyz_df, crs=rasterCrs.to_string(), clip_with=coastlines_polygon.geometry.values,
-                grid_surface=args.grid_surface, grid_contours=args.grid_contours)
-        pool.map_async(pfn, ims)
+        plot_properties = pool.map_async(pfn, ims)
+        plot_properties = plot_properties.get()
+
