@@ -27,38 +27,35 @@ import os
 import pkg_resources
 from shutil import copy, rmtree
 from tempfile import TemporaryDirectory
+from qcore.im import IM
 
 script_dir = os.path.abspath(os.path.dirname(__file__))
 MAP_WIDTH = 7
 
-
 CITIES = {"Christchurch": (172.63622540000006, -43.5320544),
           "Wellington": (174.77623600000004, -41.2864603),
           "Auckland": (174.76333150000005, -36.8484597),
-          "New Plymouth": (174.0752278,  -39.0556253 ),
-          "Rotorua": (176.249746,38.136848),
-          "Taupo" : (176.070447, -38.684286),
-          "Napier" : (176.91201780000006, -39.4928444),
-          "Palmerston North" : (175.60821450000003, -40.3523065),
-          "Masterton": (175.6573502,-40.9511118),
-          "Nelson" : (173.283965, -41.270632),
-          "Blenheim" : (173.96125,-41.513443),
-          "Kaikoura" : (173.679911,-42.399448),
-          "Tekapo" : (170.477121,-44.004674),
-          "Timaru" : (171.254973,-44.396972),
-          "Queenstown" : (168.662644,-45.031162),
-          "Dunedin" : (170.5027976,-45.8787605),
-          "Haast": (169.042437,-43.881107),
-          "Greymouth" : (171.21076229999994,-42.4503925),
-          "Westport" : (171.60589,-41.754522)
+          "New Plymouth": (174.0752278, -39.0556253),
+          "Rotorua": (176.249746, 38.136848),
+          "Taupo": (176.070447, -38.684286),
+          "Napier": (176.91201780000006, -39.4928444),
+          "Palmerston North": (175.60821450000003, -40.3523065),
+          "Masterton": (175.6573502, -40.9511118),
+          "Nelson": (173.283965, -41.270632),
+          "Blenheim": (173.96125, -41.513443),
+          "Kaikoura": (173.679911, -42.399448),
+          "Tekapo": (170.477121, -44.004674),
+          "Timaru": (171.254973, -44.396972),
+          "Queenstown": (168.662644, -45.031162),
+          "Dunedin": (170.5027976, -45.8787605),
+          "Haast": (169.042437, -43.881107),
+          "Greymouth": (171.21076229999994, -42.4503925),
+          "Westport": (171.60589, -41.754522)
+
+          }
 
 
-}
-
-
-
-
-#TODO:
+# TODO:
 # Crop the map : Done
 # Color size : Done
 # Set the aspect / size
@@ -234,13 +231,12 @@ def get_args():
         help="Run faster with slightly less resolution for interpolated surface",
         action="store_true"
     )
-    
+
     arg(
         "--crop-na",
         help="Crop out no data area. Faster processing",
         action="store_true"
     ),
-
 
     arg(
         "imcsv", help="path to im csv file"
@@ -258,7 +254,7 @@ def get_args():
 
     if args.region is not None:
         corners = args.region.split("/")
-        assert len(corners)==4, "Required format is xmin/xmax/ymin/ymax"
+        assert len(corners) == 4, "Required format is xmin/xmax/ymin/ymax"
 
         try:
             corners = [float(x) for x in corners]
@@ -268,7 +264,6 @@ def get_args():
 
         else:
             args.region = corners
-
 
     return args
 
@@ -281,10 +276,10 @@ def city_labels(ax):
         ax.annotate(city, xy=(lon, lat), xytext=(3, 3), textcoords="offset points")
         lons.append(lon)
         lats.append(lat)
-    ax.plot(lons,lats,'o')
+    ax.plot(lons, lats, 'o')
+
 
 def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True, fast=False):
-
     if Path(tiff_name).exists() and not overwrite:
         return
 
@@ -298,8 +293,8 @@ def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True, fast=False
 
     xCoords = np.arange(pgv_array[:, 0].min(), pgv_array[:, 0].max() + rasterRes, rasterRes)
     yCoords = np.arange(pgv_array[:, 1].min(), pgv_array[:, 1].max() + rasterRes, rasterRes)
-    #print(xCoords.shape)
-    #print(yCoords.shape)
+    # print(xCoords.shape)
+    # print(yCoords.shape)
     zCoords = np.zeros([yCoords.shape[0], xCoords.shape[0]])
     # loop among each cell in the raster extension
     for indexX, x in np.ndenumerate(xCoords):
@@ -310,7 +305,6 @@ def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True, fast=False
                 zCoords[indexY, indexX] = tempZ
             else:
                 zCoords[indexY, indexX] = np.nan
-
 
     transform = Affine.translation(xCoords[0] - rasterRes / 2, yCoords[0] - rasterRes / 2) * Affine.scale(rasterRes,
                                                                                                           rasterRes)
@@ -331,9 +325,8 @@ def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True, fast=False
     triInterpRaster.close()
 
 
-
 def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_labels=True,
-                  region = None,
+                  region=None,
                   grid_surface=True,
                   grid_contours=True, basemap=True,
                   local_basemap="NZ10.tif",
@@ -341,24 +334,22 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
                   interp_overwrite=True,
                   fast=False,
                   crop_na=False):
-
-    #print(f"{prop_name} {crs} {clip_with} {grid_surface} {grid_contours} {basemap} {local_basemap}")
+    # print(f"{prop_name} {crs} {clip_with} {grid_surface} {grid_contours} {basemap} {local_basemap}")
 
     if crop_na:
-        #xyz = xyz.fillna(0) # no data gets 0
+        # xyz = xyz.fillna(0) # no data gets 0
         xyz = xyz.loc[xyz[prop_name].notna()]
 
-
     if region is not None:
-        xmin,xmax,ymin,ymax = region
-        xyz = xyz.loc[(xyz['lon']>=xmin) & (xyz['lon']<=xmax) & (xyz['lat']>=ymin) & (xyz['lat']<=ymax)]
+        xmin, xmax, ymin, ymax = region
+        xyz = xyz.loc[(xyz['lon'] >= xmin) & (xyz['lon'] <= xmax) & (xyz['lat'] >= ymin) & (xyz['lat'] <= ymax)]
 
     if grid_surface:
 
         pgv_array = xyz[['lon', 'lat', prop_name]].to_numpy()
 
         surface_tiff = outdir / f'triangleInterpolation_{prop_name}.tif'
-        triangle_interpolation(pgv_array, surface_tiff,{"init":crs}, overwrite=interp_overwrite, fast=fast)
+        triangle_interpolation(pgv_array, surface_tiff, {"init": crs}, overwrite=interp_overwrite, fast=fast)
 
     else:
         xyz = xyz.loc[xyz[prop_name].notna()]
@@ -367,14 +358,12 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
 
     #    geodata = gpd.GeoDataFrame(stations, crs={"init":rasterCrs.to_string()}, geometry=geometry)
 
-
     fig, ax = plt.subplots(figsize=(14, 14))
     ax.set_aspect(1)
 
     if grid_surface:
 
         grid_surface = rioxarray.open_rasterio(surface_tiff, masked=True)
-
 
         # clipped: xarray.DataArray
         clipped = grid_surface.rio.clip(clip_with, crs, drop=False)
@@ -388,14 +377,16 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
         #                                         "anchor":(0.4,1.5), # Try less than 1.5 for more spacing
         #                                         "label":"PGA (g)"})
 
-        #for more customization, try below.
-        p=clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=0.8, add_colorbar=False)
+        # for more customization, try below.
+        p = clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=0.8, add_colorbar=False)
 
-        #cbar = plt.colorbar(p, ax=ax, orientation="horizontal", ticklocation='bottom')
+        # cbar = plt.colorbar(p, ax=ax, orientation="horizontal", ticklocation='bottom')
         cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
-        cbar = plt.colorbar(p, ax=ax, cax=cax,orientation="horizontal",ticklocation='bottom', shrink=0.8)
-        unit = "g" # IM("pSA").get_unit()
-        cbar.set_label(f"{prop_name} ({unit})",fontsize=12)
+        cbar = plt.colorbar(p, ax=ax, cax=cax, orientation="horizontal", ticklocation='bottom', shrink=0.8)
+        # unit = "g" #
+        imname_prefix = prop_name.split("_")[0]  # in case we have pSA_0.1 etc
+        unit = IM(imname_prefix).get_unit()
+        cbar.set_label(f"{prop_name} ({unit})", fontsize=12)
 
     else:
         geodata = gpd.GeoDataFrame(xyz, crs={"init": crs}, geometry=geometry)
@@ -405,7 +396,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
         # add basemap
         if local_basemap is not None:
 
-            #cx.add_basemap(ax, crs=crs, source=cx.providers.Stamen.TerrainLabels, zoom="auto")
+            # cx.add_basemap(ax, crs=crs, source=cx.providers.Stamen.TerrainLabels, zoom="auto")
 
             cx.add_basemap(ax, crs=crs, source=local_basemap, zoom=8)  # add basemap
             # cx.add_basemap(ax, crs=crs, source="NZ10_roads.tif", zoom="10") #not quite good
@@ -424,18 +415,19 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
 
     ax.set_xlabel('Longitude', fontsize=10)
     ax.set_ylabel('Latitude', fontsize='medium')
-    #ax.legend(loc='lower center',mode='expand')
+    # ax.legend(loc='lower center',mode='expand')
 
     plt.title(f"{prop_name} at stations", fontsize=15)
     #    plt.show()
 
     prop_name_p = prop_name.replace(".", "p")
+
+    fig.tight_layout()
     fig.savefig(outdir / f"{prefix}_{prop_name_p}.png")
     plt.close(fig)
 
 
 if __name__ == "__main__":
-
     rasterCrs = CRS.from_epsg(4326)
 
     args = get_args()
@@ -454,7 +446,6 @@ if __name__ == "__main__":
     xyz_df = ims_df.join(stations, how='right')[['lon', 'lat'] + ims]  # joining 2 dataframes on index "station" name.
     coastlines_polygon = gpd.read_file('nz_coastlines/nz-coastlines-topo-150k_polygon.shp')
 
-
     # for im in ims:
     #
     #     plot_property(xyz_df, im, rasterCrs.to_string(),coastlines_polygon.geometry.values,
@@ -466,10 +457,9 @@ if __name__ == "__main__":
                   enable_city_labels=args.enable_city_labels,
                   region=args.region,
                   grid_surface=args.grid_surface, grid_contours=args.grid_contours,
-                  fast=args.fast,interp_overwrite=False, crop_na=args.crop_na)
+                  fast=args.fast, interp_overwrite=False, crop_na=args.crop_na)
 
     with Pool(args.nproc) as pool:
         plot_properties = pool.map_async(pfn, ims[:4])
 
         plot_properties = plot_properties.get()
-
