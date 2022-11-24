@@ -32,6 +32,40 @@ script_dir = os.path.abspath(os.path.dirname(__file__))
 MAP_WIDTH = 7
 
 
+CITIES = {"Christchurch": (172.63622540000006, -43.5320544),
+          "Wellington": (174.77623600000004, -41.2864603),
+          "Auckland": (174.76333150000005, -36.8484597),
+          "New Plymouth": (174.0752278,  -39.0556253 ),
+          "Rotorua": (176.249746,38.136848),
+          "Taupo" : (176.070447, -38.684286),
+          "Napier" : (176.91201780000006, -39.4928444),
+          "Palmerston North" : (175.60821450000003, -40.3523065),
+          "Masterton": (175.6573502,-40.9511118),
+          "Nelson" : (173.283965, -41.270632),
+          "Blenheim" : (173.96125,-41.513443),
+          "Kaikoura" : (173.679911,-42.399448),
+          "Tekapo" : (170.477121,-44.004674),
+          "Timaru" : (171.254973,-44.396972),
+          "Queenstown" : (168.662644,-45.031162),
+          "Dunedin" : (170.5027976,-45.8787605),
+          "Haast": (169.042437,-43.881107),
+          "Greymouth" : (171.21076229999994,-42.4503925),
+          "Westport" : (171.60589,-41.754522)
+
+
+}
+
+
+
+
+#TODO:
+# Crop the map : Done
+# Color size : Done
+# Set the aspect / size
+# Draw SRF or a box
+# Roads
+
+
 def get_args():
     parser = ArgumentParser()
     arg = parser.add_argument
@@ -42,7 +76,6 @@ def get_args():
         default="plot_items",
         help="output filename excluding extension",
     )
-    # arg("--fast", help="no topography, low resolution coastlines", action="store_true")
     # arg(
     #     "-s",
     #     "--srf-files",
@@ -74,7 +107,7 @@ def get_args():
     #     type=float,
     #     default=1000.0,
     # )
-    # arg("-r", "--region", help="Region to plot in the form xmin/xmax/ymin/ymax.")
+    arg("-r", "--region", help="Region to plot in the form xmin/xmax/ymin/ymax.")
     # arg(
     #     "-v",
     #     "--vm-corners",
@@ -171,13 +204,15 @@ def get_args():
     #     help="search radius for interpolation eg: 5k (only m|s units for surface)",
     # )
     # arg("--labels-file", help="file containing 'lat lon label' to be added to the map")
-    # arg(
-    #     "--disable-city-labels",
-    #     dest="enable_city_labels",
-    #     help="Flag to disable city_labels - these are plotted by default",
-    #     default=True,
-    #     action="store_false",
-    # )
+
+    arg(
+        "--disable-city-labels",
+        dest="enable_city_labels",
+        help="Flag to disable city_labels - these are plotted by default",
+        default=True,
+        action="store_false",
+    )
+
     # arg(
     #     "--disable-roads",
     #     dest="enable_roads",
@@ -195,6 +230,19 @@ def get_args():
     # )
 
     arg(
+        "--fast",
+        help="Run faster with slightly less resolution for interpolated surface",
+        action="store_true"
+    )
+    
+    arg(
+        "--crop-na",
+        help="Crop out no data area. Faster processing",
+        action="store_true"
+    ),
+
+
+    arg(
         "imcsv", help="path to im csv file"
     )
 
@@ -206,16 +254,48 @@ def get_args():
         "--station-sep", default=" ", help="the delimiter used in the station file"
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.region is not None:
+        corners = args.region.split("/")
+        assert len(corners)==4, "Required format is xmin/xmax/ymin/ymax"
+
+        try:
+            corners = [float(x) for x in corners]
+        except ValueError:
+            print("Error: xmin/xmax/ymin/ymax should be numbers.")
+            args.region = None
+
+        else:
+            args.region = corners
 
 
-def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True):
+    return args
+
+
+def city_labels(ax):
+    lons = []
+    lats = []
+    for city in CITIES:
+        lon, lat = CITIES[city]
+        ax.annotate(city, xy=(lon, lat), xytext=(3, 3), textcoords="offset points")
+        lons.append(lon)
+        lats.append(lat)
+    ax.plot(lons,lats,'o')
+
+def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True, fast=False):
+
     if Path(tiff_name).exists() and not overwrite:
         return
 
     triFn = Triangulation(pgv_array[:, 0], pgv_array[:, 1])
     linTriFn = LinearTriInterpolator(triFn, pgv_array[:, 2])
-    rasterRes = 0.01
+
+    if fast:
+        rasterRes = 0.03
+    else:
+        rasterRes = 0.01
+
     xCoords = np.arange(pgv_array[:, 0].min(), pgv_array[:, 0].max() + rasterRes, rasterRes)
     yCoords = np.arange(pgv_array[:, 1].min(), pgv_array[:, 1].max() + rasterRes, rasterRes)
     #print(xCoords.shape)
@@ -251,18 +331,35 @@ def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True):
     triInterpRaster.close()
 
 
-def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, grid_surface=True, grid_contours=True, basemap=True,
+
+def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_labels=True,
+                  region = None,
+                  grid_surface=True,
+                  grid_contours=True, basemap=True,
                   local_basemap="NZ10.tif",
                   cmap="CMRmap_r",
-                  interp_overwrite=True):
+                  interp_overwrite=True,
+                  fast=False,
+                  crop_na=False):
 
     #print(f"{prop_name} {crs} {clip_with} {grid_surface} {grid_contours} {basemap} {local_basemap}")
+
+    if crop_na:
+        #xyz = xyz.fillna(0) # no data gets 0
+        xyz = xyz.loc[xyz[prop_name].notna()]
+
+
+    if region is not None:
+        xmin,xmax,ymin,ymax = region
+        xyz = xyz.loc[(xyz['lon']>=xmin) & (xyz['lon']<=xmax) & (xyz['lat']>=ymin) & (xyz['lat']<=ymax)]
+
     if grid_surface:
-        xyz = xyz.fillna(0)
+
         pgv_array = xyz[['lon', 'lat', prop_name]].to_numpy()
 
-        surface_tiff = f'triangleInterpolation_{prop_name}.tif'
-        triangle_interpolation(pgv_array, surface_tiff,{"init":crs}, overwrite=interp_overwrite)
+        surface_tiff = outdir / f'triangleInterpolation_{prop_name}.tif'
+        triangle_interpolation(pgv_array, surface_tiff,{"init":crs}, overwrite=interp_overwrite, fast=fast)
+
     else:
         xyz = xyz.loc[xyz[prop_name].notna()]
 
@@ -270,16 +367,36 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, grid_surface=T
 
     #    geodata = gpd.GeoDataFrame(stations, crs={"init":rasterCrs.to_string()}, geometry=geometry)
 
-    fig, ax = plt.subplots(figsize=(20, 20))
+
+    fig, ax = plt.subplots(figsize=(14, 14))
+    ax.set_aspect(1)
 
     if grid_surface:
 
         grid_surface = rioxarray.open_rasterio(surface_tiff, masked=True)
 
+
+        # clipped: xarray.DataArray
         clipped = grid_surface.rio.clip(clip_with, crs, drop=False)
         if grid_contours:
             clipped[0].plot.contour(ax=ax, colors=['black'], linewidths=[0.3])  # draw contour
-        clipped.plot(ax=ax, cmap=cmap, alpha=0.7)  # render clipped surface
+        # render clipped surface
+        # cbar_kwargs : https://matplotlib.org/stable/api/figure_api.html#matplotlib.figure.Figure.colorbar
+
+        # clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=0.8,
+        #                            cbar_kwargs={"orientation":"horizontal",
+        #                                         "anchor":(0.4,1.5), # Try less than 1.5 for more spacing
+        #                                         "label":"PGA (g)"})
+
+        #for more customization, try below.
+        p=clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=0.8, add_colorbar=False)
+
+        #cbar = plt.colorbar(p, ax=ax, orientation="horizontal", ticklocation='bottom')
+        cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
+        cbar = plt.colorbar(p, ax=ax, cax=cax,orientation="horizontal",ticklocation='bottom', shrink=0.8)
+        unit = "g" # IM("pSA").get_unit()
+        cbar.set_label(f"{prop_name} ({unit})",fontsize=12)
+
     else:
         geodata = gpd.GeoDataFrame(xyz, crs={"init": crs}, geometry=geometry)
         geodata.plot(prop_name, ax=ax, legend=True, markersize=1, cmap=cmap)  # draw points
@@ -287,17 +404,29 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, grid_surface=T
     if basemap:
         # add basemap
         if local_basemap is not None:
+
+            #cx.add_basemap(ax, crs=crs, source=cx.providers.Stamen.TerrainLabels, zoom="auto")
+
             cx.add_basemap(ax, crs=crs, source=local_basemap, zoom=8)  # add basemap
+            # cx.add_basemap(ax, crs=crs, source="NZ10_roads.tif", zoom="10") #not quite good
+
             # this map was obtained by the following lines
             # w, s, e, n = (166,-48.5,178.5,-34)
             # _ = cx.bounds2raster(w, s, e, n,ll=True, zoom=10, path="NZ10.tif",
             # source=cx.providers.Stamen.TerrainBackground)
+
+            # Possible Map styles are here: https://xyzservices.readthedocs.io/en/stable/gallery.html
         else:  # Download map from online (slow and quality may be low)
             cx.add_basemap(ax, crs=crs, source=cx.providers.Stamen.TerrainBackground, zoom="auto")
 
+    if enable_city_labels:
+        city_labels(ax)
+
     ax.set_xlabel('Longitude', fontsize=10)
     ax.set_ylabel('Latitude', fontsize='medium')
-    plt.title(f"{prop_name} at stations", fontsize=12)
+    #ax.legend(loc='lower center',mode='expand')
+
+    plt.title(f"{prop_name} at stations", fontsize=15)
     #    plt.show()
 
     prop_name_p = prop_name.replace(".", "p")
@@ -333,9 +462,14 @@ if __name__ == "__main__":
 
     print(args.nproc)
     pfn = partial(plot_property, xyz_df, crs=rasterCrs.to_string(), clip_with=coastlines_polygon.geometry.values,
-                  outdir=out_dir, prefix=basename, grid_surface=args.grid_surface, grid_contours=args.grid_contours)
+                  outdir=out_dir, prefix=basename,
+                  enable_city_labels=args.enable_city_labels,
+                  region=args.region,
+                  grid_surface=args.grid_surface, grid_contours=args.grid_contours,
+                  fast=args.fast,interp_overwrite=False, crop_na=args.crop_na)
 
     with Pool(args.nproc) as pool:
-        plot_properties = pool.map_async(pfn, ims)
+        plot_properties = pool.map_async(pfn, ims[:4])
+
         plot_properties = plot_properties.get()
 
