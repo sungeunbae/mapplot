@@ -29,7 +29,8 @@ from shutil import copy, rmtree
 from tempfile import TemporaryDirectory
 from qcore.im import IM
 
-script_dir = os.path.abspath(os.path.dirname(__file__))
+script_dir = Path(__file__).parent.resolve()
+
 MAP_WIDTH = 7
 
 CITIES = {"Christchurch": (172.63622540000006, -43.5320544),
@@ -329,7 +330,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
                   region=None,
                   grid_surface=True,
                   grid_contours=True, basemap=True,
-                  local_basemap="NZ10.tif",
+                  local_basemap= script_dir /"NZ10.tif",
                   cmap="CMRmap_r",
                   interp_overwrite=True,
                   fast=False,
@@ -386,7 +387,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
         # unit = "g" #
         imname_prefix = prop_name.split("_")[0]  # in case we have pSA_0.1 etc
         unit = IM(imname_prefix).get_unit()
-        cbar.set_label(f"{prop_name} ({unit})", fontsize=12)
+        cbar.set_label(f"{prop_name} ({unit})", fontsize=15)
 
     else:
         geodata = gpd.GeoDataFrame(xyz, crs={"init": crs}, geometry=geometry)
@@ -413,11 +414,11 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
     if enable_city_labels:
         city_labels(ax)
 
-    ax.set_xlabel('Longitude', fontsize=10)
-    ax.set_ylabel('Latitude', fontsize='medium')
+    ax.set_xlabel('Longitude', fontsize=12)
+    ax.set_ylabel('Latitude', fontsize=12)
     # ax.legend(loc='lower center',mode='expand')
 
-    plt.title(f"{prop_name} at stations", fontsize=15)
+    plt.title(f"{prop_name} at stations", fontsize=20)
     #    plt.show()
 
     prop_name_p = prop_name.replace(".", "p")
@@ -444,7 +445,7 @@ if __name__ == "__main__":
     # TODO: should select relevant component
     ims = list(ims_df.columns)[1:]  # [1:] to remove component column
     xyz_df = ims_df.join(stations, how='right')[['lon', 'lat'] + ims]  # joining 2 dataframes on index "station" name.
-    coastlines_polygon = gpd.read_file('nz_coastlines/nz-coastlines-topo-150k_polygon.shp')
+    coastlines_polygon = gpd.read_file(script_dir / 'nz_coastlines/nz-coastlines-topo-150k_polygon.shp')
 
     # for im in ims:
     #
@@ -457,7 +458,8 @@ if __name__ == "__main__":
                   enable_city_labels=args.enable_city_labels,
                   region=args.region,
                   grid_surface=args.grid_surface, grid_contours=args.grid_contours,
-                  fast=args.fast, interp_overwrite=False, crop_na=args.crop_na)
+                  fast=args.fast, interp_overwrite=True, crop_na=args.crop_na)
+
 
     with Pool(args.nproc) as pool:
         plot_properties = pool.map_async(pfn, ims[:4])
