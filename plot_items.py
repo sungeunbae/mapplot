@@ -284,7 +284,7 @@ def city_labels(ax):
     ax.plot(lons, lats, 'o')
 
 
-def triangle_interpolation(llv_array, tiff_name, crs, overwrite=True, fast=False):
+def triangle_interpolation(llv_array, tiff_name, crs, overwrite=True, res=0.01):
     #also see https://www.delftstack.com/api/scipy/2d-interpolation-python/
     #https://stackoverflow.com/questions/44922766/2d-linear-interpolation-data-and-interpolated-points
     #https://pythonguides.com/matplotlib-2d-surface-plot/
@@ -295,13 +295,8 @@ def triangle_interpolation(llv_array, tiff_name, crs, overwrite=True, fast=False
     triFn = Triangulation(llv_array[:, 0], llv_array[:, 1])
     linTriFn = LinearTriInterpolator(triFn, llv_array[:, 2])
 
-    if fast:
-        rasterRes = 0.03
-    else:
-        rasterRes = 0.01
-
-    xCoords = np.arange(llv_array[:, 0].min(), llv_array[:, 0].max() + rasterRes, rasterRes)
-    yCoords = np.arange(llv_array[:, 1].min(), llv_array[:, 1].max() + rasterRes, rasterRes)
+    xCoords = np.arange(llv_array[:, 0].min(), llv_array[:, 0].max() + res, res)
+    yCoords = np.arange(llv_array[:, 1].min(), llv_array[:, 1].max() + res, res)
     # print(xCoords.shape)
     # print(yCoords.shape)
     zCoords = np.zeros([yCoords.shape[0], xCoords.shape[0]])
@@ -315,8 +310,7 @@ def triangle_interpolation(llv_array, tiff_name, crs, overwrite=True, fast=False
             else:
                 zCoords[indexY, indexX] = np.nan
 
-    transform = Affine.translation(xCoords[0] - rasterRes / 2, yCoords[0] - rasterRes / 2) * Affine.scale(rasterRes,
-                                                                                                          rasterRes)
+    transform = Affine.translation(xCoords[0] - res / 2, yCoords[0] - res / 2) * Affine.scale(res,res)
 
     triInterpRaster = rasterio.open(tiff_name,
                                     'w',
@@ -363,7 +357,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
                   grid_surface=True,
                   grid_contours=True, basemap=True,
                   local_basemap= script_dir /"NZ10.tif",
-                  cmap="CMRmap_r",
+                  cmap="CMRmap_r", # https://matplotlib.org/stable/tutorials/colors/colormaps.html
                   interp_overwrite=True,
                   fast=False,
                   crop_na=False):
@@ -382,7 +376,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
         llv_array = xyz[['lon', 'lat', prop_name]].to_numpy()
 
         surface_tiff = outdir / f'triangleInterpolation_{prop_name}.tif'
-        triangle_interpolation(llv_array, surface_tiff, {"init": crs}, overwrite=interp_overwrite, fast=fast)
+        triangle_interpolation(llv_array, surface_tiff, {"init": crs}, overwrite=interp_overwrite, res=0.03 if fast else 0.001)
 
     else:
         xyz = xyz.loc[xyz[prop_name].notna()]
@@ -399,21 +393,21 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
     # srf_surface[0].plot.pcolormesh(ax=ax, add_colorbar=False, zorder=10, alpha=1)
     # l=Line2D([168,170],[-46,-44],linewidth=3, linestyle='--', zorder=10)
     # ax.add_line(l) # '-', '--', '-.', ':', '',
-    seg_llvs, bounds, regions,  cpt_max = load_srf("/home/seb56/TeAnau_im/TeAnau_REL01.srf")
+    seg_llvs, bounds, regions,  cpt_max = load_srf("/Users/sungbae/mapplot/TeAnau/TeAnau_REL01.srf")
     for i in range(len(seg_llvs)):
         srf_tiff = outdir / f'srf{i}.tif'
-        triangle_interpolation(seg_llvs[i],srf_tiff, {"init": crs}, fast=False)
+        triangle_interpolation(seg_llvs[i],srf_tiff, {"init": crs}, res=0.001)
         srf_surface = rioxarray.open_rasterio(srf_tiff, masked=True)
-        srf_surface.plot(ax=ax,zorder=10,add_colorbar=False)
-
+        srf_surface.plot(ax=ax,cmap="afmhot_r", zorder=10, vmax=cpt_max, add_colorbar=False) 
 
     for bound in bounds:
         vertices=np.array(bound+[bound[0]]) # add the first vertex
         xs = vertices[:, 0]
         ys = vertices[:, 1]
         for i in range(len(xs)-1):
-            l=Line2D([xs[i],xs[i+1]],[ys[i],ys[i+1]],linewidth=3, linestyle='--', zorder=10)
+            l=Line2D([xs[i],xs[i+1]],[ys[i],ys[i+1]],linewidth=2, linestyle='-', zorder=10)
             ax.add_line(l)
+
 
 
     if grid_surface:
@@ -468,6 +462,8 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
 
     if enable_city_labels:
         city_labels(ax)
+
+
 
     ax.set_xlabel('Longitude', fontsize=12)
     ax.set_ylabel('Latitude', fontsize=12)
