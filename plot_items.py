@@ -10,6 +10,9 @@ import xarray.plot
 
 import matplotlib.pyplot as plt
 from matplotlib.tri import Triangulation, LinearTriInterpolator
+from matplotlib.lines import Line2D
+import math
+
 
 import numpy as np
 import geopandas as gpd
@@ -28,6 +31,7 @@ import pkg_resources
 from shutil import copy, rmtree
 from tempfile import TemporaryDirectory
 from qcore.im import IM
+from qcore import srf
 
 script_dir = Path(__file__).parent.resolve()
 
@@ -280,20 +284,24 @@ def city_labels(ax):
     ax.plot(lons, lats, 'o')
 
 
-def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True, fast=False):
+def triangle_interpolation(llv_array, tiff_name, crs, overwrite=True, fast=False):
+    #also see https://www.delftstack.com/api/scipy/2d-interpolation-python/
+    #https://stackoverflow.com/questions/44922766/2d-linear-interpolation-data-and-interpolated-points
+    #https://pythonguides.com/matplotlib-2d-surface-plot/
+
     if Path(tiff_name).exists() and not overwrite:
         return
 
-    triFn = Triangulation(pgv_array[:, 0], pgv_array[:, 1])
-    linTriFn = LinearTriInterpolator(triFn, pgv_array[:, 2])
+    triFn = Triangulation(llv_array[:, 0], llv_array[:, 1])
+    linTriFn = LinearTriInterpolator(triFn, llv_array[:, 2])
 
     if fast:
         rasterRes = 0.03
     else:
         rasterRes = 0.01
 
-    xCoords = np.arange(pgv_array[:, 0].min(), pgv_array[:, 0].max() + rasterRes, rasterRes)
-    yCoords = np.arange(pgv_array[:, 1].min(), pgv_array[:, 1].max() + rasterRes, rasterRes)
+    xCoords = np.arange(llv_array[:, 0].min(), llv_array[:, 0].max() + rasterRes, rasterRes)
+    yCoords = np.arange(llv_array[:, 1].min(), llv_array[:, 1].max() + rasterRes, rasterRes)
     # print(xCoords.shape)
     # print(yCoords.shape)
     zCoords = np.zeros([yCoords.shape[0], xCoords.shape[0]])
@@ -325,6 +333,30 @@ def triangle_interpolation(pgv_array, tiff_name, crs, overwrite=True, fast=False
     triInterpRaster.write(zCoords, 1)
     triInterpRaster.close()
 
+def load_srf(srf_file):
+    seg_llvs = srf.srf2llv_py(srf_file)
+    # planes = srf.read_header(srf_file, idx=True)
+    bounds = srf.get_bounds(srf_file)
+    np_bounds = np.array(bounds)
+    n_plane = len(bounds)
+    cpt_percentile=95
+    all_vs = np.concatenate((seg_llvs))[:, -1]
+    percentile = np.percentile(all_vs, cpt_percentile)
+    # round percentile significant digits for colour pallete
+    if percentile < 1000:
+        # 1 sf
+        cpt_max = round(percentile, -int(math.floor(math.log10(abs(percentile)))))
+    else:
+        # 2 sf
+        cpt_max = round(percentile, 1 - int(math.floor(math.log10(abs(percentile)))))
+    regions = []
+    for s in range(n_plane):
+        x_min, y_min = np.min(np_bounds[s], axis=0)
+        x_max, y_max = np.max(np_bounds[s], axis=0)
+        regions.append((x_min, x_max, y_min, y_max))
+
+    return seg_llvs, bounds, regions,  cpt_max
+
 
 def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_labels=True,
                   region=None,
@@ -347,10 +379,10 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
 
     if grid_surface:
 
-        pgv_array = xyz[['lon', 'lat', prop_name]].to_numpy()
+        llv_array = xyz[['lon', 'lat', prop_name]].to_numpy()
 
         surface_tiff = outdir / f'triangleInterpolation_{prop_name}.tif'
-        triangle_interpolation(pgv_array, surface_tiff, {"init": crs}, overwrite=interp_overwrite, fast=fast)
+        triangle_interpolation(llv_array, surface_tiff, {"init": crs}, overwrite=interp_overwrite, fast=fast)
 
     else:
         xyz = xyz.loc[xyz[prop_name].notna()]
@@ -361,6 +393,28 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
 
     fig, ax = plt.subplots(figsize=(14, 14))
     ax.set_aspect(1)
+
+    # Playing with SRF. srf->grdfile then loaded onto QGIS, masked, converted to tiff.
+    # srf_surface = rioxarray.open_rasterio(script_dir / "TeAnau/seg0.tif", masked = True)
+    # srf_surface[0].plot.pcolormesh(ax=ax, add_colorbar=False, zorder=10, alpha=1)
+    # l=Line2D([168,170],[-46,-44],linewidth=3, linestyle='--', zorder=10)
+    # ax.add_line(l) # '-', '--', '-.', ':', '',
+    seg_llvs, bounds, regions,  cpt_max = load_srf("/home/seb56/TeAnau_im/TeAnau_REL01.srf")
+    for i in range(len(seg_llvs)):
+        srf_tiff = outdir / f'srf{i}.tif'
+        triangle_interpolation(seg_llvs[i],srf_tiff, {"init": crs}, fast=False)
+        srf_surface = rioxarray.open_rasterio(srf_tiff, masked=True)
+        srf_surface.plot(ax=ax,zorder=10,add_colorbar=False)
+
+
+    for bound in bounds:
+        vertices=np.array(bound+[bound[0]]) # add the first vertex
+        xs = vertices[:, 0]
+        ys = vertices[:, 1]
+        for i in range(len(xs)-1):
+            l=Line2D([xs[i],xs[i+1]],[ys[i],ys[i+1]],linewidth=3, linestyle='--', zorder=10)
+            ax.add_line(l)
+
 
     if grid_surface:
 
@@ -410,6 +464,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, enable_city_la
             # Possible Map styles are here: https://xyzservices.readthedocs.io/en/stable/gallery.html
         else:  # Download map from online (slow and quality may be low)
             cx.add_basemap(ax, crs=crs, source=cx.providers.Stamen.TerrainBackground, zoom="auto")
+
 
     if enable_city_labels:
         city_labels(ax)
@@ -462,6 +517,6 @@ if __name__ == "__main__":
 
 
     with Pool(args.nproc) as pool:
-        plot_properties = pool.map_async(pfn, ims[:4])
+        plot_properties = pool.map_async(pfn, ims[:1])
 
         plot_properties = plot_properties.get()
