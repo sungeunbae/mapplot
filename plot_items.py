@@ -483,7 +483,9 @@ if __name__ == "__main__":
 
 
     print(args.nproc)
-
+    srf_surfaces = []
+    srf_outlines = []
+    
     if args.srf_files:
         srf_surfaces, srf_outlines = pre_plot_srfs(args.srf_files,out_dir, crs=rasterCrs.to_string(), res=0.001, outline_only=args.srf_only_outline, outline_color=args.srf_outline_color)
 
