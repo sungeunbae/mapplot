@@ -127,6 +127,14 @@ def get_args():
         action="store_true",
     )
 
+    arg(
+        "--contour-levels",
+        help="number of contour levels",
+        type=int,
+        default=10,
+    )
+
+
     arg("--surface", help="interpolated grid surface", action="store_true")
 
     arg(
@@ -351,6 +359,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, title, height,
                   region=None,
                   surface=True,
                   contours=True,
+                  contour_levels=10,
                   cmap="CMRmap_r",
                   opacity=0.7,
                   srf_surfaces = [],
@@ -378,7 +387,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, title, height,
         llv_array = xyz[['lon', 'lat', prop_name]].to_numpy()
 
         surface_tiff = outdir / f'surface_{prop_name}.tif'
-        #rbf(llv_array, surface_tiff, {"init": crs}, overwrite=interp_overwrite, fast=fast)
+        #rbf(llv_array, surface_tiff, {"init": crs}, fast=fast)
         tri_interp(llv_array, surface_tiff, {"init": crs}, fast=fast)
 
 
@@ -398,7 +407,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, title, height,
         # clipped: xarray.DataArray
         clipped = surface.rio.clip(clip_with, crs, drop=False)
         if contours:
-            clipped[0].plot.contour(ax=ax, colors=['black'], linewidths=[0.3], levels=7)  # draw contour
+            clipped[0].plot.contour(ax=ax, colors=['black'], linewidths=[0.3], levels=contour_levels)  # draw contour
         # render clipped surface
         p = clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=opacity, add_colorbar=False) # add custom colorbar below
 
@@ -489,6 +498,7 @@ if __name__ == "__main__":
     #               region=args.region,
     #               surface=args.surface,
     #               contours=args.contours,
+    #               contour_levels = args.contour_levels,
     #               opacity=args.opacity,
     #               cmap=args.colormap,
     #               srf_surfaces=srf_surfaces,
@@ -504,7 +514,9 @@ if __name__ == "__main__":
                   aspect=args.map_aspect,
                   enable_city_labels=args.enable_city_labels,
                   region=args.region,
-                  surface=args.surface, contours=args.contours,
+                  surface=args.surface,
+                  contours=args.contours,
+                  contour_levels=args.contour_levels,
                   opacity=args.opacity,
                   cmap=args.colormap,
                   srf_surfaces=srf_surfaces, srf_outlines=srf_outlines,
@@ -513,5 +525,5 @@ if __name__ == "__main__":
 
 
     with Pool(args.nproc) as pool:
-        plot_properties = pool.map_async(pfn, ims)
+        plot_properties = pool.map_async(pfn, ims[-10:])
         plot_properties = plot_properties.get()
