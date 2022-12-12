@@ -379,8 +379,12 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, title, height,
 
 
     if region is not None:
+        #TODO: Crop to a larger area than specified first (for better interpolation). Crop to the exact dimension later
         xmin, xmax, ymin, ymax = region
-        xyz = xyz.loc[(xyz['lon'] >= xmin) & (xyz['lon'] <= xmax) & (xyz['lat'] >= ymin) & (xyz['lat'] <= ymax)]
+        xmargin = (xmax-xmin)* 0.05
+        ymargin = (ymax-ymin)* 0.05
+
+        xyz = xyz.loc[(xyz['lon'] >= xmin-xmargin) & (xyz['lon'] <= xmax+xmargin) & (xyz['lat'] >= ymin-ymargin) & (xyz['lat'] <= ymax+ymargin)]
 
     if surface:
 
@@ -393,6 +397,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, title, height,
 
     else:
         xyz = xyz.loc[xyz[prop_name].notna()]
+
 
     geometry = [Point(xy) for xy in zip(xyz["lon"], xyz["lat"])]
 
@@ -485,7 +490,7 @@ if __name__ == "__main__":
     print(args.nproc)
     srf_surfaces = []
     srf_outlines = []
-    
+
     if args.srf_files:
         srf_surfaces, srf_outlines = pre_plot_srfs(args.srf_files,out_dir, crs=rasterCrs.to_string(), res=0.001, outline_only=args.srf_only_outline, outline_color=args.srf_outline_color)
 
