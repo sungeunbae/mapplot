@@ -400,8 +400,8 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, title, height,
 
     plot_srfs(ax,srf_surfaces,srf_outlines)
 
-    if surface:
 
+    if surface:
         surface = rioxarray.open_rasterio(surface_tiff, masked=True)
 
         # clipped: xarray.DataArray
