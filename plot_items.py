@@ -11,6 +11,8 @@ import contextily as cx
 import matplotlib.pyplot as plt
 from matplotlib.tri import Triangulation, LinearTriInterpolator
 from matplotlib.lines import Line2D
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+
 from scipy.interpolate import Rbf
 
 
@@ -37,32 +39,24 @@ from qcore import srf, constants
 
 script_dir = Path(__file__).parent.resolve()
 COASTLINES_TOPO_POLYGON = script_dir / 'nz_coastlines/nz-coastlines-topo-150k_polygon.shp'
-LOCAL_BASEMAP= script_dir /"NZ10.tif"
+DEFAULT_LOCAL_BASEMAP= script_dir /"NZ10.tif"
+DEFAULT_CITY_CSV = script_dir/"city.csv"
 
-MAP_WIDTH = 12
-MAP_HEIGHT = 15
+DEFAULT_MAP_WIDTH = 12
+DEFAULT_MAP_HEIGHT = 15
+DEFAULT_PLOT_ASPECT = 1.5
 
-CITIES = {"Christchurch": (172.63622540000006, -43.5320544),
-          "Wellington": (174.77623600000004, -41.2864603),
-          "Auckland": (174.76333150000005, -36.8484597),
-          "New Plymouth": (174.0752278, -39.0556253),
-          "Rotorua": (176.249746, 38.136848),
-          "Taupo": (176.070447, -38.684286),
-          "Napier": (176.91201780000006, -39.4928444),
-          "Palmerston North": (175.60821450000003, -40.3523065),
-          "Masterton": (175.6573502, -40.9511118),
-          "Nelson": (173.283965, -41.270632),
-          "Blenheim": (173.96125, -41.513443),
-          "Kaikoura": (173.679911, -42.399448),
-          "Tekapo": (170.477121, -44.004674),
-          "Timaru": (171.254973, -44.396972),
-          "Queenstown": (168.662644, -45.031162),
-          "Dunedin": (170.5027976, -45.8787605),
-          "Haast": (169.042437, -43.881107),
-          "Greymouth": (171.21076229999994, -42.4503925),
-          "Westport": (171.60589, -41.754522)
+DEFAULT_COMP = "geom"
+DEFAULT_CONTOUR_LEVELS = 10
+DEFAULT_OPACITY = 0.7
+DEFAULT_COLORMAP = "CMRmap_r"
 
-          }
+DEFAULT_GRID_SIZE = 1000
+beachball = script_dir/"beachball.png"
+
+
+LAYER_IMAGE = 3
+LAYER_SRF = 5
 
 
 # TODO:
@@ -82,7 +76,7 @@ def get_args():
     )
     arg(
         "-s",
-        "--srf-files",
+        "--srf-file",
         action="append",
         help="SRF files to plot, use quoted wildcards, repeat as needed",
     )
@@ -98,21 +92,22 @@ def get_args():
         default="navy",
     )
 
-    arg("--map-height", help="Height of the output map in inches", type=float, default=MAP_HEIGHT),
-    arg("--map-width", help="Width of the output map in inches", type=float, default=MAP_WIDTH),
-    arg("--map-aspect", help="Aspect of Height / Width of the plotted map", type=float, default=1.5)
+    arg("--map-height", help="Height of the output map in inches", type=float, default=DEFAULT_MAP_HEIGHT),
+    arg("--map-width", help="Width of the output map in inches", type=float, default=DEFAULT_MAP_WIDTH),
+    arg("--map-aspect", help="Aspect of Height / Width of the plotted map", type=float, default=DEFAULT_PLOT_ASPECT)
+    arg("--basemap", help="Path to the local basemap", type=Path, default=DEFAULT_LOCAL_BASEMAP)
 
     arg("-r", "--region", help="Region to plot in the form xmin/xmax/ymin/ymax.")
 
-    arg("--comp", help="component in IM file to plot", default="geom",choices=[x.str_value for x in list(constants.Components)])
+    arg("--comp", help="component in IM file to plot", default=DEFAULT_COMP,choices=[x.str_value for x in list(constants.Components)])
 
     arg(
         "--opacity",
         help="overlay opacity: transparent(0) - opaque(1)",
         type=float,
-        default=0.7,
+        default=DEFAULT_OPACITY,
     )
-    arg("--colormap", help="CPT to use for overlay data. Use '_r' to invert. See https://matplotlib.org/stable/tutorials/colors/colormaps.html", default="CMRmap_r")
+    arg("--colormap", help="CPT to use for overlay data. Use '_r' to invert. See https://matplotlib.org/stable/tutorials/colors/colormaps.html", default=DEFAULT_COLORMAP)
 
 
     # arg(
@@ -131,7 +126,7 @@ def get_args():
         "--contour-levels",
         help="number of contour levels",
         type=int,
-        default=10,
+        default=DEFAULT_CONTOUR_LEVELS,
     )
 
 
@@ -143,6 +138,12 @@ def get_args():
         help="Flag to disable city_labels - these are plotted by default",
         default=True,
         action="store_false",
+    )
+    arg(
+        "--city-csv",
+        help="City locations CSV file: name, lon, lat",
+        type=Path,
+        default=DEFAULT_CITY_CSV,
     )
 
     # arg(
@@ -196,24 +197,27 @@ def get_args():
     return args
 
 
-def city_labels(ax):
+def city_labels(ax, city_csv):
     lons = []
     lats = []
-    for city in CITIES:
-        lon, lat = CITIES[city]
+
+    city_df=pd.read_csv(city_csv,index_col=0)
+    for city in city_df.index:
+        lon = city_df.loc[city].lon
+        lat = city_df.loc[city].lat
         ax.annotate(city, xy=(lon, lat), xytext=(3, 3), textcoords="offset points")
         lons.append(lon)
         lats.append(lat)
     ax.plot(lons, lats, 'o')
 
-def pre_interp(X,Y,Z, xres, yres, num_spacing=1000, fast=False):
+def pre_interp(X,Y,Z, xres, yres, grid_size=DEFAULT_GRID_SIZE, fast=False):
 
-    assert num_spacing > 0
+    assert grid_size > 0
     # Use xres or yres if specified. Otherwise determine on-the-fly.
     if xres is None:
-        xres = (X.max() - X.min()) / num_spacing
+        xres = (X.max() - X.min()) / grid_size
     if yres is None:
-        yres = (Y.max() - Y.min()) / num_spacing
+        yres = (Y.max() - Y.min()) / grid_size
 
     res = min(xres, yres)
 
@@ -225,7 +229,7 @@ def pre_interp(X,Y,Z, xres, yres, num_spacing=1000, fast=False):
     zCoords = np.zeros([yCoords.shape[0], xCoords.shape[0]])
 
     return xCoords, yCoords, zCoords, res
-def export_kde_raster(Z, X,Y, xres, yres, crs, filename):
+def raster_to_tiff(Z, X,Y, xres, yres, crs, filename):
     '''Export and save a kernel density raster.'''
 
     # Set transform
@@ -245,11 +249,15 @@ def export_kde_raster(Z, X,Y, xres, yres, crs, filename):
     ) as new_dataset:
             new_dataset.write(Z, 1)
 def tri_interp(llv_array, tiff_name, crs, res=None, fast=False):
-    # https://hatarilabs.com/ih-en/geospatial-triangular-interpolation-with-python-scipy-geopandas-and-rasterio-tutorial
-    # https://pygis.io/docs/e_interpolation.html
-    # https://www.delftstack.com/api/scipy/2d-interpolation-python/
-    # https://stackoverflow.com/questions/44922766/2d-linear-interpolation-data-and-interpolated-points
-    # https://pythonguides.com/matplotlib-2d-surface-plot/
+
+    # Studied wide materials as below, testing various interpolation algorithms including Kriging, Rbf etc.
+    # Opted for this implementation as it is fastest, resource-light, and output is reasonably close to gmt surface
+    # References:
+    #  https://hatarilabs.com/ih-en/geospatial-triangular-interpolation-with-python-scipy-geopandas-and-rasterio-tutorial
+    #  https://pygis.io/docs/e_interpolation.html
+    #  https://www.delftstack.com/api/scipy/2d-interpolation-python/
+    #  https://stackoverflow.com/questions/44922766/2d-linear-interpolation-data-and-interpolated-points
+    #  https://pythonguides.com/matplotlib-2d-surface-plot/
 
     X,Y,Z = llv_array[:,0], llv_array[:,1], llv_array[:,2]
 
@@ -270,11 +278,13 @@ def tri_interp(llv_array, tiff_name, crs, res=None, fast=False):
             else:
                 zCoords[indexY, indexX] = tempZ
 
-    export_kde_raster(zCoords,xCoords, yCoords, res,res,crs, tiff_name)
+    raster_to_tiff(zCoords,xCoords, yCoords, res,res,crs, tiff_name)
 
 
 
 def rbf(llv_array, tiff_name, crs, res=None, fast=False):
+# this is not used, and found to be inferior to tri_interp.
+# left here as an example to show how a different interpolation can be used
 
     X, Y, Z = llv_array[:, 0], llv_array[:, 1], llv_array[:, 2]
     rbf_fun = Rbf(X,Y,Z, function='linear')
@@ -283,8 +293,7 @@ def rbf(llv_array, tiff_name, crs, res=None, fast=False):
     xGrid, yGrid = np.meshgrid(xCoords,yCoords)
     zNew = rbf_fun(xGrid.ravel(),yGrid.ravel()).reshape(xGrid.shape)
 
-    export_kde_raster(zNew, xCoords, yCoords, res, res, crs, tiff_name)
-
+    raster_to_tiff(zNew, xCoords, yCoords, res, res, crs, tiff_name)
 
 
 def load_srf(srf_file):
@@ -296,7 +305,7 @@ def load_srf(srf_file):
     cpt_percentile = 95
     all_vs = np.concatenate((seg_llvs))[:, -1]
     percentile = np.percentile(all_vs, cpt_percentile)
-    # round percentile significant digits for colour pallete
+    # round percentile significant digits for colour palette
     if percentile < 1000:
         # 1 sf
         cpt_max = round(percentile, -int(math.floor(math.log10(abs(percentile)))))
@@ -311,72 +320,79 @@ def load_srf(srf_file):
 
     return seg_llvs, bounds, regions,  cpt_max
 
-def pre_plot_srfs(srf_files, outdir, crs, res=0.001, outline_only=False, outline_color='navy', linewidth=1):
+def pre_plot_srfs(srf_files, outdir, crs, res=0.001, outline_only=False, outline_color='navy', linewidth=1, layer=LAYER_SRF):
 
-    all_srf_surfaces = []
-    all_srf_outlines = []
+    all_surfaces = [] # for all SRF files
+    all_rectangles = []
     for srf_file in srf_files:
-        srf_seg_surfaces = []
-        srf_seg_outlines = []
+        seg_surfaces = [] # can be multiple segments per SRF file
+        seg_rectangles = []
         seg_llvs, bounds, regions,  cpt_max = load_srf(srf_file)
         srf_name=Path(srf_file).stem
         if not outline_only:
             for i in range(len(seg_llvs)):
-                srf_tiff = outdir / f'srf_{srf_name}_{i}.tif'
-                tri_interp(seg_llvs[i],srf_tiff, {"init": crs}, res=res)
-                srf_seg_surfaces.append(srf_tiff)
+                seg_tiff = outdir / f'srf_{srf_name}_{i}.tif'
+                tri_interp(seg_llvs[i],seg_tiff, {"init": crs}, res=res)
+                seg_surfaces.append(seg_tiff)
 
-            all_srf_surfaces.append((srf_seg_surfaces,cpt_max))
+            all_surfaces.append((seg_surfaces,cpt_max))
 
         for bound in bounds:
-            vertices=np.array(bound+[bound[0]]) # add the first vertex
+            vertices=np.array(bound+[bound[0]]) # add the first vertex to complete 4 edges
             xs = vertices[:, 0]
             ys = vertices[:, 1]
-            seg_outline=[]
+            rectangle =[]
             for i in range(len(xs)-1):
-                l=Line2D([xs[i],xs[i+1]],[ys[i],ys[i+1]],color=outline_color, linewidth=linewidth, linestyle='-', zorder=10)
-                seg_outline.append(l)
-            srf_seg_outlines.append(seg_outline)
-        all_srf_outlines.append(srf_seg_outlines)
-    return all_srf_surfaces, all_srf_outlines
+                edge=Line2D([xs[i],xs[i+1]],[ys[i],ys[i+1]],color=outline_color, linewidth=linewidth, linestyle='-', zorder=layer)
+                rectangle.append(edge)
+            seg_rectangles.append(rectangle)
+        all_rectangles.append(seg_rectangles)
+    return all_surfaces, all_rectangles
 
-def plot_srfs(ax, all_srf_surfaces,all_srf_outlines):
-    for srf_surfaces, cpt_max, in all_srf_surfaces:
-        for srf_surface in srf_surfaces:
-            for seg_surface_tiff in srf_surfaces:
-                seg_surface = rioxarray.open_rasterio(seg_surface_tiff, masked=True)
-                seg_surface.plot(ax=ax,cmap="afmhot_r", zorder=10, vmax=cpt_max, add_colorbar=False)
+def plot_srfs(ax, all_surfaces,all_rectangles,layer=LAYER_SRF):
+    for seg_surfaces, cpt_max, in all_surfaces: #all SRF files
+        for seg_tiff in seg_surfaces:
+            seg_surface = rioxarray.open_rasterio(seg_tiff, masked=True)
+            seg_surface.plot(ax=ax,cmap="afmhot_r", zorder=layer, vmax=cpt_max, add_colorbar=False)
 
-    for seg_rectangles in all_srf_outlines:
-        for seg_rectangle in seg_rectangles:
-            for line in seg_rectangle:
-                new_line = cp_object(line)
-                ax.add_line(new_line)
+    for seg_rectangles in all_rectangles:
+        for rectangle in seg_rectangles:
+            for edge in rectangle:
+                new_edge = cp_object(edge) # The same Line2D element can't be added to multiple figures
+                ax.add_line(new_edge)
 
 
-def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, title, height, width, aspect,
+def plot_im(xyz, im_name, crs, clip_with, outdir, prefix, title, height, width, aspect,
                   enable_city_labels=True,
                   region=None,
                   surface=True,
                   contours=True,
-                  contour_levels=10,
-                  cmap="CMRmap_r",
-                  opacity=0.7,
+                  contour_levels=DEFAULT_CONTOUR_LEVELS,
+                  cmap=DEFAULT_COLORMAP,
+                  opacity=DEFAULT_OPACITY,
                   srf_surfaces = [],
                   srf_outlines = [],
+                  city_csv = DEFAULT_CITY_CSV,
                   basemap=True,
-                  local_basemap= LOCAL_BASEMAP,
+                  local_basemap= DEFAULT_LOCAL_BASEMAP,
                   fast=False,
                   nan_is=None):
-    # print(f"{prop_name} {crs} {clip_with} {surface} {contours} {basemap} {local_basemap}")
+    # print(f"{im_name} {crs} {clip_with} {surface} {contours} {basemap} {local_basemap}")
 
+    # if not surface:
+    #     xyz = xyz.fillna(0)
 
     if nan_is is None:  #NaN is removed
-        xyz = xyz.loc[xyz[prop_name].notna()]
+        xyz = xyz.loc[xyz[im_name].notna()]
     else:
         # xyz = xyz.fillna(0) # no data gets 0
-        xyz=xyz.fillna(float(nan_is))
+        xyz=xyz.fillna(nan_is) #nan_is is already known to be float
 
+
+    xmin = xyz['lon'].min()
+    xmax = xyz['lon'].max()
+    ymin = xyz['lat'].min()
+    ymax = xyz['lat'].max()
 
     if region is not None:
         #TODO: Crop to a larger area than specified first (for better interpolation). Crop to the exact dimension later
@@ -386,46 +402,53 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, title, height,
 
         xyz = xyz.loc[(xyz['lon'] >= xmin-xmargin) & (xyz['lon'] <= xmax+xmargin) & (xyz['lat'] >= ymin-ymargin) & (xyz['lat'] <= ymax+ymargin)]
 
-    if surface:
+    if surface or contours:
 
-        llv_array = xyz[['lon', 'lat', prop_name]].to_numpy()
+        llv_array = xyz[['lon', 'lat', im_name]].to_numpy()
 
-        surface_tiff = outdir / f'surface_{prop_name}.tif'
+        surface_tiff = outdir / f'surface_{im_name}.tif'
         #rbf(llv_array, surface_tiff, {"init": crs}, fast=fast)
         tri_interp(llv_array, surface_tiff, {"init": crs}, fast=fast)
 
 
-    else:
-        xyz = xyz.loc[xyz[prop_name].notna()]
 
 
-    geometry = [Point(xy) for xy in zip(xyz["lon"], xyz["lat"])]
 
     fig, ax = plt.subplots(figsize=(width, height))
+
+    plt.xlim([xmin,xmax])
+    plt.ylim([ymin, ymax])
+
+
+    if not surface:
+        geometry = [Point(xy) for xy in zip(xyz["lon"], xyz["lat"])]
+        geodata = gpd.GeoDataFrame(xyz, crs={"init": crs}, geometry=geometry)
+        geodata.plot(im_name, ax=ax, legend=True, markersize=1, cmap=cmap)  # draw points
+
 
     plot_srfs(ax,srf_surfaces,srf_outlines)
 
 
-    if surface:
-        surface = rioxarray.open_rasterio(surface_tiff, masked=True)
 
+    if surface or contours:
         # clipped: xarray.DataArray
-        clipped = surface.rio.clip(clip_with, crs, drop=False)
+        clipped = rioxarray.open_rasterio(surface_tiff, masked=True).rio.clip(clip_with, crs, drop=False)
         if contours:
             clipped[0].plot.contour(ax=ax, colors=['black'], linewidths=[0.3], levels=contour_levels)  # draw contour
-        # render clipped surface
-        p = clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=opacity, add_colorbar=False) # add custom colorbar below
 
-        cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
-        cbar = plt.colorbar(p, ax=ax, cax=cax, orientation="horizontal", ticklocation='bottom', shrink=0.8)
-        # unit = "g" #
-        imname_prefix = prop_name.split("_")[0]  # in case we have pSA_0.1 etc
-        unit = IM(imname_prefix).get_unit()
-        cbar.set_label(f"{prop_name} ({unit})", fontsize=15)
+        if surface:
+            # render clipped surface
+            p = clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=opacity, add_colorbar=False) # add custom colorbar below
+            cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
+            cbar = plt.colorbar(p, ax=ax, cax=cax, orientation="horizontal", ticklocation='bottom', shrink=0.8)
+            # unit = "g" #
+            imname_prefix = im_name.split("_")[0]  # in case we have pSA_0.1 etc
+            unit = IM(imname_prefix).get_unit()
+            cbar.set_label(f"{im_name} ({unit})", fontsize=15)
 
-    else:
-        geodata = gpd.GeoDataFrame(xyz, crs={"init": crs}, geometry=geometry)
-        geodata.plot(prop_name, ax=ax, legend=True, markersize=1, cmap=cmap)  # draw points
+
+
+
 
     if basemap:
         # add basemap
@@ -444,7 +467,7 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, title, height,
 
 
     if enable_city_labels:
-        city_labels(ax)
+        city_labels(ax, city_csv)
 
 
 
@@ -455,14 +478,29 @@ def plot_property(xyz, prop_name, crs, clip_with, outdir, prefix, title, height,
     plt.title(f"{title}", fontsize=20)
     #    plt.show()
 
-    prop_name_p = prop_name.replace(".", "p")
+    im_name_p = im_name.replace(".", "p")
+
+
+    # plot_image(ax, beachball, 167,-45.5, 0.1)
+
 
     ax.set_aspect(aspect)
     fig.tight_layout()
-    fig.savefig(outdir / f"{prefix}_{prop_name_p}.png")
+    fig.savefig(outdir / f"{prefix}_{im_name_p}.png")
     plt.close(fig)
 
 
+def plot_image(ax, imagefile, lon, lat, zoom=1, layer=LAYER_IMAGE): #zoom = 1 is full size of image
+    # may be used for displaying external markers eg. beachballs
+    # In fact, beachballls can be generated on-the-fly.
+    # See https://github.com/ucgmsim/sim_atlas/blob/main/backend/utils/beachball_creation.py
+
+    img = plt.imread(imagefile)
+    im = OffsetImage(img, zoom=zoom)
+    im.image.axes = ax
+    # create bbox for the images
+    ab = AnnotationBbox(im, (lon,lat), frameon=False, pad=0.0, zorder=layer)
+    ax.add_artist(ab)
 
 if __name__ == "__main__":
     rasterCrs = CRS.from_epsg(4326)
@@ -491,29 +529,11 @@ if __name__ == "__main__":
     srf_surfaces = []
     srf_outlines = []
 
-    if args.srf_files:
-        srf_surfaces, srf_outlines = pre_plot_srfs(args.srf_files,out_dir, crs=rasterCrs.to_string(), res=0.001, outline_only=args.srf_only_outline, outline_color=args.srf_outline_color)
+    if args.srf_file:
+        srf_surfaces, srf_outlines = pre_plot_srfs(args.srf_file,out_dir, crs=rasterCrs.to_string(), res=0.001, outline_only=args.srf_only_outline, outline_color=args.srf_outline_color)
 
-    # for imname in ims:
-    #   plot_property(xyz_df, imname, crs=rasterCrs.to_string(), clip_with=coastlines_polygon.geometry.values,
-    #               outdir=out_dir, prefix=basename,
-    #               title = args.title,
-    #               height = args.height,
-    #               width = args.width,
-    #               aspect = args.asepct,
-    #               enable_city_labels=args.enable_city_labels,
-    #               region=args.region,
-    #               surface=args.surface,
-    #               contours=args.contours,
-    #               contour_levels = args.contour_levels,
-    #               opacity=args.opacity,
-    #               cmap=args.colormap,
-    #               srf_surfaces=srf_surfaces,
-    #               srf_outlines=srf_outlines,
-    #               fast=args.fast,
-    #               nan_is=args.nan_is)
 
-    pfn = partial(plot_property, xyz_df, crs=rasterCrs.to_string(), clip_with=coastlines_polygon.geometry.values,
+    pfn = partial(plot_im, xyz_df, crs=rasterCrs.to_string(), clip_with=coastlines_polygon.geometry.values,
                   outdir=out_dir, prefix=basename,
                   title=args.title,
                   height=args.map_height,
@@ -527,10 +547,16 @@ if __name__ == "__main__":
                   opacity=args.opacity,
                   cmap=args.colormap,
                   srf_surfaces=srf_surfaces, srf_outlines=srf_outlines,
+                  city_csv=args.city_csv,
                   fast=args.fast,
                   nan_is=args.nan_is)
 
 
+    # Parallel
     with Pool(args.nproc) as pool:
         plot_properties = pool.map_async(pfn, ims[-10:])
         plot_properties = plot_properties.get()
+
+    # Serial
+    # for im in ims[10:]:
+    #     pfn(im)
