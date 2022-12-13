@@ -61,13 +61,15 @@ DEFAULT_COLORMAP = "CMRmap_r"
 
 DEFAULT_GRID_SIZE = 1000
 
-DEFAULT_AXIS_LABEL_FONT_SIZE = 12
+DEFAULT_AXIS_FONT_SIZE = 12
 DEFAULT_TITLE_FONT_SIZE = 25
 DEFAULT_COLORBAR_FONT_SIZE = 15
+DEFAULT_CITY_FONT_SIZE = 12
 
 LAYER_IMAGE = 3
 LAYER_SRF = 5
 
+marker_png = script_dir/"marker.png"
 
 # TODO:
 # Enable Roads
@@ -107,9 +109,11 @@ def get_args():
     arg("--map-aspect", help="Aspect of Height / Width of the plotted map", type=float, default=DEFAULT_PLOT_ASPECT)
     arg("--basemap", help="Path to the local basemap", type=Path, default=DEFAULT_LOCAL_BASEMAP)
 
+    arg("--column", help="Column names to plot. If unspecified, all included. Repeat as needed", action="append")
+
     arg("-r", "--region", help="Region to plot in the form xmin/xmax/ymin/ymax.")
 
-    arg("--comp", help="component in IM file to plot", default=DEFAULT_COMP,choices=[x.str_value for x in list(constants.Components)])
+    arg("--comp", help="Component in IM file to plot", default=DEFAULT_COMP, choices=[x.str_value for x in list(constants.Components)])
 
 
     arg("--colormap", help="CPT to use for overlay data. Use '_r' to invert. See https://matplotlib.org/stable/tutorials/colors/colormaps.html", default=DEFAULT_COLORMAP)
@@ -162,7 +166,7 @@ def get_args():
         type=float,
         default=DEFAULT_SURFACE_OPACITY,
     )
-    
+
     arg(
         "--disable-city-labels",
         dest="enable_city_labels",
@@ -199,9 +203,9 @@ def get_args():
     ),
 
     arg(
-        "--axis-label-font-size",
+        "--axis-font-size",
         type=int,
-        default=DEFAULT_AXIS_LABEL_FONT_SIZE,
+        default=DEFAULT_AXIS_FONT_SIZE,
     )
     arg(
         "--title-font-size",
@@ -212,6 +216,11 @@ def get_args():
         "--colorbar-font-size",
         type=int,
         default=DEFAULT_COLORBAR_FONT_SIZE,
+    )
+    arg(
+        "--city-font-size",
+        type=int,
+        default=DEFAULT_CITY_FONT_SIZE,
     )
     arg(
         "imcsv", help="path to im csv file"
@@ -243,7 +252,7 @@ def get_args():
     return args
 
 
-def city_labels(ax, city_csv):
+def city_labels(ax, city_csv, fontsize=DEFAULT_CITY_FONT_SIZE):
     lons = []
     lats = []
 
@@ -251,7 +260,7 @@ def city_labels(ax, city_csv):
     for city in city_df.index:
         lon = city_df.loc[city].lon
         lat = city_df.loc[city].lat
-        ax.annotate(city, xy=(lon, lat), xytext=(3, 3), textcoords="offset points")
+        ax.annotate(city, xy=(lon, lat), xytext=(3, 3), textcoords="offset points", fontsize=fontsize)
         lons.append(lon)
         lats.append(lat)
     ax.plot(lons, lats, 'o')
@@ -396,7 +405,9 @@ def pre_plot_srfs(srf_files, outdir, crs, res=0.001, outline_only=False, outline
         all_rectangles.append(seg_rectangles)
     return all_surfaces, all_rectangles
 
+
 def plot_srfs(ax, all_surfaces,all_rectangles,layer=LAYER_SRF):
+
     for seg_surfaces, cpt_max, in all_surfaces: #all SRF files
         for seg_tiff in seg_surfaces:
             seg_surface = rioxarray.open_rasterio(seg_tiff, masked=True)
@@ -429,9 +440,11 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
                   contour_line_width=DEFAULT_CONTOUR_LINE_WIDTH,
                   contour_line_color=DEFAULT_CONTOUR_LINE_COLOR,
                   surface_opacity=DEFAULT_SURFACE_OPACITY,
-                  axis_label_font_size=DEFAULT_AXIS_LABEL_FONT_SIZE,
+
+                  axis_font_size=DEFAULT_AXIS_FONT_SIZE,
                   colorbar_font_size=DEFAULT_COLORBAR_FONT_SIZE,
                   title_font_size=DEFAULT_TITLE_FONT_SIZE,
+                  city_font_size=DEFAULT_CITY_FONT_SIZE,
 
                   fast=False,
                   nan_is=None):
@@ -474,8 +487,6 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
 
     fig, ax = plt.subplots(figsize=(width, height))
 
-    cmappable = ScalarMappable(norm=Normalize(vmin=xyz[im_name].min(), vmax=xyz[im_name].max()), cmap=cmap)
-
     if surface or contours:
         # clipped: xarray.DataArray
         clipped = rioxarray.open_rasterio(surface_tiff, masked=True).rio.clip(clip_with, crs, drop=False)
@@ -484,28 +495,26 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
 
         if surface:
             # render clipped surface
-            clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=opacity, add_colorbar=False) # add custom colorbar below
+            clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=surface_opacity, add_colorbar=False) # add custom colorbar below
 
 
     if points:
         geometry = [Point(xy) for xy in zip(xyz["lon"], xyz["lat"])]
         geodata = gpd.GeoDataFrame(xyz, crs=crs,geometry=geometry)
-        geodata.plot(im_name, ax=ax, legend=False, markersize=point_size, cmap=cmap)  # draw points
+        geodata.plot(im_name, ax=ax, legend=False, markersize=point_size, cmap=cmap)  # draw points, no default colorbar
 
-
+    # Place a custom colorbar
     cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
+    cmappable = ScalarMappable(norm=Normalize(vmin=xyz[im_name].min(), vmax=xyz[im_name].max()), cmap=cmap)
     cbar = plt.colorbar(mappable=cmappable, ax=ax, cax=cax, orientation="horizontal", ticklocation='bottom', shrink=0.8)
 
-    # unit = "g" #
     imname_prefix = im_name.split("_")[0]  # in case we have pSA_0.1 etc
-    unit = IM(imname_prefix).get_unit()
+    unit = IM(imname_prefix).get_unit() # get the unit for this IM type
     cbar.set_label(f"{im_name} ({unit})", fontsize=colorbar_font_size)
 
 
     if basemap:
-        # add basemap
         if local_basemap is not None:
-
             cx.add_basemap(ax, crs=crs, source=local_basemap, zoom=8)  # add basemap
 
             # this map was obtained by the following lines
@@ -517,33 +526,32 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
         else:  # Download map from online (slow and quality may be low)
             cx.add_basemap(ax, crs=crs, source=cx.providers.Stamen.TerrainBackground, zoom="auto")
 
-
     if enable_city_labels:
-        city_labels(ax, city_csv)
+        city_labels(ax, city_csv, city_font_size)
 
-
-
-
+    # Show SRFs. (Has to be done here to prevent weird basemap cropping)
     plot_srfs(ax,srf_surfaces,srf_outlines)
 
+    # Show axis labels
+    ax.set_xlabel('Longitude', fontsize=axis_font_size)
+    ax.set_ylabel('Latitude', fontsize=axis_font_size)
 
-
-    ax.set_xlabel('Longitude', fontsize=axis_label_font_size)
-    ax.set_ylabel('Latitude', fontsize=axis_label_font_size)
-    # ax.legend(loc='lower center',mode='expand')
-
+    # Show Title
     plt.title(f"{title}", fontsize=title_font_size)
-    #    plt.show()
 
+    # Crop to the specified region
     ax.set_xbound(lower=xmin, upper=xmax)
     ax.set_ybound(lower=ymin, upper=ymax)
 
+    # Make sure file name doesn't have confusing dots.
     im_name_p = im_name.replace(".", "p")
 
 
-    # plot_image(ax, beachball, 167,-45.5, 0.1)
+    # If image should be added to the map, do here
+    plot_image(ax, marker_png, 167,-44.0, 0.03)
 
 
+    # Set the aspect as specified.
     ax.set_aspect(aspect)
     fig.tight_layout()
     fig.savefig(outdir / f"{prefix}_{im_name_p}.png")
@@ -563,9 +571,11 @@ def plot_image(ax, imagefile, lon, lat, zoom=1, layer=LAYER_IMAGE): #zoom = 1 is
     ax.add_artist(ab)
 
 if __name__ == "__main__":
-    rasterCrs = CRS.from_epsg(4326)
+#    rasterCrs = CRS.from_epsg(4326)
+    crs = 'EPSG:4326'
 
     args = get_args()
+    print(f"Using {args.nproc} CPU cores")
 
     ims_df = pd.read_csv(args.imcsv, index_col=0)
     stations = pd.read_csv(args.station_file, sep=' ', header=None,
@@ -581,19 +591,30 @@ if __name__ == "__main__":
     ims_with_one_comp=ims_df[ims_df.component==args.comp] # select the specified component
     print(f"Plotting component {args.comp}")
 
-    xyz_df = ims_with_one_comp.join(stations, how='right')[['lon', 'lat'] + ims]  # joining 2 dataframes on index "station" name.
+    ims_to_plot = []
+    if args.column is None:
+        ims_to_plot = ims
+    else:
+        for colname in set(args.column): # remove duplicates
+            if colname in ims:
+                ims_to_plot.append(colname)
+            else:
+                print(f"Warning: No such column present: {colname}")
+    print(f"Columns to plot: {ims_to_plot}")
+
+    xyz_df = ims_with_one_comp.join(stations, how='right')[['lon', 'lat'] + ims_to_plot]  # joining 2 dataframes on index "station" name.
+
     coastlines_polygon = gpd.read_file(COASTLINES_TOPO_POLYGON)
 
 
-    print(args.nproc)
     srf_surfaces = []
     srf_outlines = []
 
     if args.srf_file:
-        srf_surfaces, srf_outlines = pre_plot_srfs(args.srf_file,out_dir, crs=rasterCrs.to_string(), res=0.001, outline_only=args.srf_only_outline, outline_color=args.srf_outline_color)
+        srf_surfaces, srf_outlines = pre_plot_srfs(args.srf_file,out_dir, crs=crs, res=0.001, outline_only=args.srf_only_outline, outline_color=args.srf_outline_color)
 
 
-    pfn = partial(plot_im, xyz_df, crs=rasterCrs.to_string(), clip_with=coastlines_polygon.geometry.values,
+    pfn = partial(plot_im, xyz_df, crs=crs, clip_with=coastlines_polygon.geometry.values,
                   outdir=out_dir, prefix=basename,
                   title=args.title,
                   height=args.map_height,
@@ -610,7 +631,7 @@ if __name__ == "__main__":
                   contour_line_width=args.contour_line_width,
                   contour_line_color=args.contour_line_color,
 
-                  axis_label_font_size=args.axis_label_font_size,
+                  axis_font_size=args.axis_font_size,
                   title_font_size=args.title_font_size,
                   colorbar_font_size=args.colorbar_font_size,
 
@@ -624,7 +645,7 @@ if __name__ == "__main__":
 
     # Parallel
     with Pool(args.nproc) as pool:
-        plot_properties = pool.map_async(pfn, ims[-10:])
+        plot_properties = pool.map_async(pfn, ims_to_plot[-10:])
         plot_properties = plot_properties.get()
 
     # Serial
