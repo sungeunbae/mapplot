@@ -416,18 +416,6 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix, title, height, width, 
 
     fig, ax = plt.subplots(figsize=(width, height))
 
-    plt.xlim([xmin,xmax])
-    plt.ylim([ymin, ymax])
-
-
-    if not surface:
-        geometry = [Point(xy) for xy in zip(xyz["lon"], xyz["lat"])]
-        geodata = gpd.GeoDataFrame(xyz, crs={"init": crs}, geometry=geometry)
-        geodata.plot(im_name, ax=ax, legend=True, markersize=1, cmap=cmap)  # draw points
-
-
-    plot_srfs(ax,srf_surfaces,srf_outlines)
-
 
 
     if surface or contours:
@@ -446,7 +434,10 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix, title, height, width, 
             unit = IM(imname_prefix).get_unit()
             cbar.set_label(f"{im_name} ({unit})", fontsize=15)
 
-
+    if not surface:
+        geometry = [Point(xy) for xy in zip(xyz["lon"], xyz["lat"])]
+        geodata = gpd.GeoDataFrame(xyz, crs={"init": crs}, geometry=geometry)
+        geodata.plot(im_name, ax=ax, legend=False, markersize=10, cmap=cmap)  # draw points
 
 
 
@@ -471,12 +462,20 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix, title, height, width, 
 
 
 
+
+    plot_srfs(ax,srf_surfaces,srf_outlines)
+
+
+
     ax.set_xlabel('Longitude', fontsize=12)
     ax.set_ylabel('Latitude', fontsize=12)
     # ax.legend(loc='lower center',mode='expand')
 
     plt.title(f"{title}", fontsize=20)
     #    plt.show()
+
+    ax.set_xbound(lower=xmin, upper=xmax)
+    ax.set_ybound(lower=ymin, upper=ymax)
 
     im_name_p = im_name.replace(".", "p")
 
