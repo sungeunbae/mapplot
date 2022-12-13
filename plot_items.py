@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 from matplotlib.tri import Triangulation, LinearTriInterpolator
 from matplotlib.lines import Line2D
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 
 from scipy.interpolate import Rbf
 
@@ -47,13 +49,21 @@ DEFAULT_MAP_HEIGHT = 15
 DEFAULT_PLOT_ASPECT = 1.5
 
 DEFAULT_COMP = "geom"
+
+DEFAULT_POINT_SIZE = 10
+
 DEFAULT_CONTOUR_LEVELS = 10
-DEFAULT_OPACITY = 0.7
+DEFAULT_CONTOUR_LINE_WIDTH = 1.0
+DEFAULT_CONTOUR_LINE_COLOR = 'black'
+
+DEFAULT_SURFACE_OPACITY = 0.7
 DEFAULT_COLORMAP = "CMRmap_r"
 
 DEFAULT_GRID_SIZE = 1000
-beachball = script_dir/"beachball.png"
 
+DEFAULT_AXIS_LABEL_FONT_SIZE = 12
+DEFAULT_TITLE_FONT_SIZE = 25
+DEFAULT_COLORBAR_FONT_SIZE = 15
 
 LAYER_IMAGE = 3
 LAYER_SRF = 5
@@ -101,12 +111,7 @@ def get_args():
 
     arg("--comp", help="component in IM file to plot", default=DEFAULT_COMP,choices=[x.str_value for x in list(constants.Components)])
 
-    arg(
-        "--opacity",
-        help="overlay opacity: transparent(0) - opaque(1)",
-        type=float,
-        default=DEFAULT_OPACITY,
-    )
+
     arg("--colormap", help="CPT to use for overlay data. Use '_r' to invert. See https://matplotlib.org/stable/tutorials/colors/colormaps.html", default=DEFAULT_COLORMAP)
 
 
@@ -116,6 +121,17 @@ def get_args():
     #     action="store_true",
     # )
 
+    arg(
+        "--points",
+        help="display values as points",
+        action="store_true",
+    )
+    arg(
+        "--point-size",
+        help="point size",
+        type=float,
+        default=DEFAULT_POINT_SIZE,
+    )
     arg(
         "--contours",
         help="add contour lines from CPT increments",
@@ -128,10 +144,25 @@ def get_args():
         type=int,
         default=DEFAULT_CONTOUR_LEVELS,
     )
-
-
+    arg(
+        "--contour-line-width",
+        help="contour line width",
+        type=float,
+        default=DEFAULT_CONTOUR_LINE_WIDTH,
+    )
+    arg(
+        "--contour-line-color",
+        help="contour line color",
+        default=DEFAULT_CONTOUR_LINE_COLOR,
+    )
     arg("--surface", help="interpolated grid surface", action="store_true")
-
+    arg(
+        "--surface-opacity",
+        help="overlay opacity: transparent(0) - opaque(1)",
+        type=float,
+        default=DEFAULT_SURFACE_OPACITY,
+    )
+    
     arg(
         "--disable-city-labels",
         dest="enable_city_labels",
@@ -167,6 +198,21 @@ def get_args():
         default=None,
     ),
 
+    arg(
+        "--axis-label-font-size",
+        type=int,
+        default=DEFAULT_AXIS_LABEL_FONT_SIZE,
+    )
+    arg(
+        "--title-font-size",
+        type=int,
+        default=DEFAULT_TITLE_FONT_SIZE,
+    )
+    arg(
+        "--colorbar-font-size",
+        type=int,
+        default=DEFAULT_COLORBAR_FONT_SIZE,
+    )
     arg(
         "imcsv", help="path to im csv file"
     )
@@ -229,6 +275,7 @@ def pre_interp(X,Y,Z, xres, yres, grid_size=DEFAULT_GRID_SIZE, fast=False):
     zCoords = np.zeros([yCoords.shape[0], xCoords.shape[0]])
 
     return xCoords, yCoords, zCoords, res
+
 def raster_to_tiff(Z, X,Y, xres, yres, crs, filename):
     '''Export and save a kernel density raster.'''
 
@@ -362,19 +409,30 @@ def plot_srfs(ax, all_surfaces,all_rectangles,layer=LAYER_SRF):
                 ax.add_line(new_edge)
 
 
-def plot_im(xyz, im_name, crs, clip_with, outdir, prefix, title, height, width, aspect,
+def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
+                  title, height, width, aspect,
                   enable_city_labels=True,
                   region=None,
+                  points=False,
                   surface=True,
                   contours=True,
-                  contour_levels=DEFAULT_CONTOUR_LEVELS,
+
                   cmap=DEFAULT_COLORMAP,
-                  opacity=DEFAULT_OPACITY,
                   srf_surfaces = [],
                   srf_outlines = [],
                   city_csv = DEFAULT_CITY_CSV,
                   basemap=True,
                   local_basemap= DEFAULT_LOCAL_BASEMAP,
+
+                  point_size=DEFAULT_POINT_SIZE,
+                  contour_levels=DEFAULT_CONTOUR_LEVELS,
+                  contour_line_width=DEFAULT_CONTOUR_LINE_WIDTH,
+                  contour_line_color=DEFAULT_CONTOUR_LINE_COLOR,
+                  surface_opacity=DEFAULT_SURFACE_OPACITY,
+                  axis_label_font_size=DEFAULT_AXIS_LABEL_FONT_SIZE,
+                  colorbar_font_size=DEFAULT_COLORBAR_FONT_SIZE,
+                  title_font_size=DEFAULT_TITLE_FONT_SIZE,
+
                   fast=False,
                   nan_is=None):
     # print(f"{im_name} {crs} {clip_with} {surface} {contours} {basemap} {local_basemap}")
@@ -395,12 +453,15 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix, title, height, width, 
     ymax = xyz['lat'].max()
 
     if region is not None:
-        #TODO: Crop to a larger area than specified first (for better interpolation). Crop to the exact dimension later
+        #crop to a larger area than specified first (for better interpolation). Crop to the exact dimension later
         xmin, xmax, ymin, ymax = region
         xmargin = (xmax-xmin)* 0.05
         ymargin = (ymax-ymin)* 0.05
 
-        xyz = xyz.loc[(xyz['lon'] >= xmin-xmargin) & (xyz['lon'] <= xmax+xmargin) & (xyz['lat'] >= ymin-ymargin) & (xyz['lat'] <= ymax+ymargin)]
+        xyz = xyz.loc[(xyz['lon'] >= xmin-xmargin) &
+                      (xyz['lon'] <= xmax+xmargin) &
+                      (xyz['lat'] >= ymin-ymargin) &
+                      (xyz['lat'] <= ymax+ymargin)]
 
     if surface or contours:
 
@@ -411,34 +472,34 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix, title, height, width, 
         tri_interp(llv_array, surface_tiff, {"init": crs}, fast=fast)
 
 
-
-
-
     fig, ax = plt.subplots(figsize=(width, height))
 
-
+    cmappable = ScalarMappable(norm=Normalize(vmin=xyz[im_name].min(), vmax=xyz[im_name].max()), cmap=cmap)
 
     if surface or contours:
         # clipped: xarray.DataArray
         clipped = rioxarray.open_rasterio(surface_tiff, masked=True).rio.clip(clip_with, crs, drop=False)
         if contours:
-            clipped[0].plot.contour(ax=ax, colors=['black'], linewidths=[0.3], levels=contour_levels)  # draw contour
+            clipped[0].plot.contour(ax=ax, colors=[contour_line_color], linewidths=[contour_line_width], levels=contour_levels)  # draw contour
 
         if surface:
             # render clipped surface
-            p = clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=opacity, add_colorbar=False) # add custom colorbar below
-            cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
-            cbar = plt.colorbar(p, ax=ax, cax=cax, orientation="horizontal", ticklocation='bottom', shrink=0.8)
-            # unit = "g" #
-            imname_prefix = im_name.split("_")[0]  # in case we have pSA_0.1 etc
-            unit = IM(imname_prefix).get_unit()
-            cbar.set_label(f"{im_name} ({unit})", fontsize=15)
+            clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=opacity, add_colorbar=False) # add custom colorbar below
 
-    if not surface:
+
+    if points:
         geometry = [Point(xy) for xy in zip(xyz["lon"], xyz["lat"])]
-        geodata = gpd.GeoDataFrame(xyz, crs={"init": crs}, geometry=geometry)
-        geodata.plot(im_name, ax=ax, legend=False, markersize=10, cmap=cmap)  # draw points
+        geodata = gpd.GeoDataFrame(xyz, crs=crs,geometry=geometry)
+        geodata.plot(im_name, ax=ax, legend=False, markersize=point_size, cmap=cmap)  # draw points
 
+
+    cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
+    cbar = plt.colorbar(mappable=cmappable, ax=ax, cax=cax, orientation="horizontal", ticklocation='bottom', shrink=0.8)
+
+    # unit = "g" #
+    imname_prefix = im_name.split("_")[0]  # in case we have pSA_0.1 etc
+    unit = IM(imname_prefix).get_unit()
+    cbar.set_label(f"{im_name} ({unit})", fontsize=colorbar_font_size)
 
 
     if basemap:
@@ -467,11 +528,11 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix, title, height, width, 
 
 
 
-    ax.set_xlabel('Longitude', fontsize=12)
-    ax.set_ylabel('Latitude', fontsize=12)
+    ax.set_xlabel('Longitude', fontsize=axis_label_font_size)
+    ax.set_ylabel('Latitude', fontsize=axis_label_font_size)
     # ax.legend(loc='lower center',mode='expand')
 
-    plt.title(f"{title}", fontsize=20)
+    plt.title(f"{title}", fontsize=title_font_size)
     #    plt.show()
 
     ax.set_xbound(lower=xmin, upper=xmax)
@@ -540,10 +601,20 @@ if __name__ == "__main__":
                   aspect=args.map_aspect,
                   enable_city_labels=args.enable_city_labels,
                   region=args.region,
+                  points=args.points,
                   surface=args.surface,
                   contours=args.contours,
+
+                  point_size=args.point_size,
                   contour_levels=args.contour_levels,
-                  opacity=args.opacity,
+                  contour_line_width=args.contour_line_width,
+                  contour_line_color=args.contour_line_color,
+
+                  axis_label_font_size=args.axis_label_font_size,
+                  title_font_size=args.title_font_size,
+                  colorbar_font_size=args.colorbar_font_size,
+
+                  surface_opacity=args.surface_opacity,
                   cmap=args.colormap,
                   srf_surfaces=srf_surfaces, srf_outlines=srf_outlines,
                   city_csv=args.city_csv,
