@@ -56,8 +56,8 @@ DEFAULT_CONTOUR_LEVELS = 10
 DEFAULT_CONTOUR_LINE_WIDTH = 1.0
 DEFAULT_CONTOUR_LINE_COLOR = 'black'
 
-DEFAULT_SURFACE_OPACITY = 0.7
-DEFAULT_COLORMAP = "CMRmap_r"
+DEFAULT_SURFACE_OPACITY = 0.9
+DEFAULT_COLORMAP = "afmhot_r"
 
 DEFAULT_GRID_SIZE = 1000
 
@@ -248,6 +248,10 @@ def get_args():
 
         else:
             args.region = corners
+
+    if not args.surface and not args.contours and not args.points:
+        print("Warning: No drawing mode selected. Points are displayed.")
+        args.points=True
 
     return args
 
