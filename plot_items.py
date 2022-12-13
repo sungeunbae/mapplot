@@ -119,27 +119,29 @@ def get_args():
     arg("--colormap", help="CPT to use for overlay data. Use '_r' to invert. See https://matplotlib.org/stable/tutorials/colors/colormaps.html", default=DEFAULT_COLORMAP)
 
 
-    # arg(
-    #     "--categorical",
-    #     help="colour scale as discreet values",
-    #     action="store_true",
-    # )
+    arg(
+        "--categorical",
+        help="Display categorical/discrete values as points. Recommended to use with a cyclinc/qualitative colormaps (eg) --colormap hsv",
+        action="store_true",
+    )
 
     arg(
         "--points",
-        help="display values as points",
+        help="Display values as points",
         action="store_true",
     )
-    arg(
-        "--point-size",
-        help="point size",
-        type=float,
-        default=DEFAULT_POINT_SIZE,
-    )
+
     arg(
         "--contours",
-        help="add contour lines from CPT increments",
+        help="Add contour lines from CPT increments",
         action="store_true",
+    )
+
+    arg(
+        "--point-size",
+        help="Point size for points/categorical",
+        type=float,
+        default=DEFAULT_POINT_SIZE,
     )
 
     arg(
@@ -249,9 +251,16 @@ def get_args():
         else:
             args.region = corners
 
-    if not args.surface and not args.contours and not args.points:
-        print("Warning: No drawing mode selected. Points are displayed.")
-        args.points=True
+
+    if args.categorical:
+        print("Categorical Points are displayed.")
+        args.surface=False
+        args.points=False
+        args.contours=False
+    else:
+        if not args.surface and not args.contours and not args.points:
+            print("Warning: No drawing mode selected. Points are displayed.")
+            args.points = True
 
     return args
 
@@ -431,6 +440,7 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
                   points=False,
                   surface=True,
                   contours=True,
+                  categorical=False,
 
                   cmap=DEFAULT_COLORMAP,
                   srf_surfaces = [],
@@ -480,41 +490,58 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
                       (xyz['lat'] >= ymin-ymargin) &
                       (xyz['lat'] <= ymax+ymargin)]
 
-    if surface or contours:
 
-        llv_array = xyz[['lon', 'lat', im_name]].to_numpy()
-
-        surface_tiff = outdir / f'surface_{im_name}.tif'
-        #rbf(llv_array, surface_tiff, {"init": crs}, fast=fast)
-        tri_interp(llv_array, surface_tiff, {"init": crs}, fast=fast)
 
 
     fig, ax = plt.subplots(figsize=(width, height))
 
-    if surface or contours:
-        # clipped: xarray.DataArray
-        clipped = rioxarray.open_rasterio(surface_tiff, masked=True).rio.clip(clip_with, crs, drop=False)
-        if contours:
-            clipped[0].plot.contour(ax=ax, colors=[contour_line_color], linewidths=[contour_line_width], levels=contour_levels)  # draw contour
 
-        if surface:
-            # render clipped surface
-            clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=surface_opacity, add_colorbar=False) # add custom colorbar below
+    if categorical:
+        uniq = list(set(xyz[im_name]))
+        cNorm = Normalize(vmin=0,vmax=len(uniq))
+        scalarMap = ScalarMappable(norm=cNorm, cmap=cmap)
+        for i in range(len(uniq)):
+            indx = (xyz[im_name] == uniq[i])
+            ax.scatter(xyz['lon'][indx], xyz['lat'][indx], s= point_size, color=scalarMap.to_rgba(i), alpha=surface_opacity, label=uniq[i])
+            plt.legend(title=im_name, title_fontsize=colorbar_font_size, fontsize=(colorbar_font_size-2), shadow=True,
+                       ncols=len(uniq), loc='lower center', bbox_to_anchor=(0.0,-0.12,1,0.05)) # push by 0.12 downwards
+
+    else:
+
+        if surface or contours:
+
+            llv_array = xyz[['lon', 'lat', im_name]].to_numpy()
+
+            surface_tiff = outdir / f'surface_{im_name}.tif'
+            #rbf(llv_array, surface_tiff, {"init": crs}, fast=fast)
+            tri_interp(llv_array, surface_tiff, {"init": crs}, fast=fast)
 
 
-    if points:
-        geometry = [Point(xy) for xy in zip(xyz["lon"], xyz["lat"])]
-        geodata = gpd.GeoDataFrame(xyz, crs=crs,geometry=geometry)
-        geodata.plot(im_name, ax=ax, legend=False, markersize=point_size, cmap=cmap)  # draw points, no default colorbar
+            # clipped: xarray.DataArray
+            clipped = rioxarray.open_rasterio(surface_tiff, masked=True).rio.clip(clip_with, crs, drop=False)
+            if contours:
+                clipped[0].plot.contour(ax=ax, colors=[contour_line_color], linewidths=[contour_line_width], levels=contour_levels)  # draw contour
 
-    # Place a custom colorbar
-    cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
-    cmappable = ScalarMappable(norm=Normalize(vmin=xyz[im_name].min(), vmax=xyz[im_name].max()), cmap=cmap)
-    cbar = plt.colorbar(mappable=cmappable, ax=ax, cax=cax, orientation="horizontal", ticklocation='bottom', shrink=0.8)
+            if surface:
+                # render clipped surface
+                clipped[0].plot.pcolormesh(ax=ax, cmap=cmap, alpha=surface_opacity, add_colorbar=False) # add custom colorbar below
 
-    imname_prefix = im_name.split("_")[0]  # in case we have pSA_0.1 etc
-    unit = IM(imname_prefix).get_unit() # get the unit for this IM type
-    cbar.set_label(f"{im_name} ({unit})", fontsize=colorbar_font_size)
+
+        if points:
+            geometry = [Point(xy) for xy in zip(xyz["lon"], xyz["lat"])]
+            geodata = gpd.GeoDataFrame(xyz, crs=crs,geometry=geometry)
+            geodata.plot(im_name, ax=ax, legend=False, markersize=point_size, cmap=cmap)  # draw points, no default colorbar
+
+        # Place a custom colorbar
+        cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
+        cNorm = ScalarMappable(norm=Normalize(vmin=xyz[im_name].min(), vmax=xyz[im_name].max()), cmap=cmap)
+        cbar = plt.colorbar(mappable=cNorm, ax=ax, cax=cax, orientation="horizontal", ticklocation='bottom', shrink=0.8)
+
+        #TODO: it may not be a valid IM
+        imname_prefix = im_name.split("_")[0]  # in case we have pSA_0.1 etc
+        unit = IM(imname_prefix).get_unit() # get the unit for this IM type
+
+        cbar.set_label(f"{im_name} ({unit})", fontsize=colorbar_font_size)
 
 
     if basemap:
@@ -552,7 +579,7 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
 
 
     # If image should be added to the map, do here
-    plot_image(ax, marker_png, 167,-44.0, 0.03)
+    # plot_image(ax, marker_png, 167,-44.0, 0.03) # Just an example
 
 
     # Set the aspect as specified.
@@ -629,6 +656,7 @@ if __name__ == "__main__":
                   points=args.points,
                   surface=args.surface,
                   contours=args.contours,
+                  categorical=args.categorical,
 
                   point_size=args.point_size,
                   contour_levels=args.contour_levels,
@@ -649,7 +677,7 @@ if __name__ == "__main__":
 
     # Parallel
     with Pool(args.nproc) as pool:
-        plot_properties = pool.map_async(pfn, ims_to_plot[-10:])
+        plot_properties = pool.map_async(pfn, ims_to_plot)
         plot_properties = plot_properties.get()
 
     # Serial
