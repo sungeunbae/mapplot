@@ -1,15 +1,16 @@
 # mapplot
 # Introduction
 
-Plots numerical/categorical values on the map based on matplotlib/geopandas. Not dependent on GMT, and can utilize myriads of other Python visualisation tools. It does not need intermediate steps to create an input file - a CSV file can be directly fed to execute.
+Plots numerical/categorical values on the map based on matplotlib/geopandas/pandas etc. Python-native and not dependent on GMT, so it can be easily extended to utilize myriads of Python visualisation tools. It does not need intermediate steps to create an input file - a CSV file can be directly fed to exeucte the code.
 
 ## Input
 Two mandatory input files are needed.
 
 ### IM csv
-An IM csv file (or it can be a generic CSV. To be discussed later) is made of two index columns (station name, compoment) followed by various IM columns (eg. PGV, PGA etc).
+An IM csv file (or it can be a generic CSV - to be discussed later) is made of two index columns (station name, compoment) followed by various IM columns (eg. PGV, PGA etc).
 
  ![Screenshot from 2022-12-14 14-16-37](https://user-images.githubusercontent.com/466989/207481131-f2a2fde3-d5eb-44b2-97c9-6087efdb3113.png)
+
 ### Station list file 
 A station list file is made of three columns (lon, lat, station name) seperated by a white space.
 
@@ -21,8 +22,8 @@ A station list file is made of three columns (lon, lat, station name) seperated 
  
   ![plot_items_PGA](https://user-images.githubusercontent.com/466989/207484539-1c96633d-f572-4e75-8d90-ec481f07587a.png)
  
- To display numerical point values, use `--points` drawing mode. If `--column` is not specified, it will plot all available columns. If multiple columns are plotted, you could use `-n NUM_CORES` to utilize multiple CPU cores. 
- If a valid IM type is plotted, it will automatically place a correct unit, eg) "g" for PGA and "cm/s" for PGV.
+ To display numerical values, use `--points` drawing mode. You can specify columns to plot with `--column` option, such as `--column PGA --column PGV`. If not specified, it will plot all available columns. If more than a few columns are plotted, you could use `-n NUM_CORES` to utilize multiple CPU cores. 
+ If the column to be plotted is a known IM type, it will automatically place a correct unit, eg) "g" for PGA and "cm/s" for PGV.
  
  ```
  python plot_items.py TeAnau_REL01.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title TeAnau --points --column PGA
@@ -35,7 +36,7 @@ A station list file is made of three columns (lon, lat, station name) seperated 
  ![plot_items_pSA_10p0](https://user-images.githubusercontent.com/466989/207482252-3be6ea2e-66a1-4915-be7b-2debdde2f018.png)
 
 To display a surface instead of points, use `--surface` option. `--contour` option adds contour lines. 
-It uses Triangulation and LinearTriInterpolator for fast, yet nice looking surfaces. While this is generally more efficient than other benchmarked interpolation algorithms, it can take a little longer than points plotting. Consider using multiple cores with `-n` option to best utilize available CPU cores, and `--fast` for slightly lower resolution. 
+It uses Triangulation and LinearTriInterpolator for fast, yet a nice looking surface. While this is generally more efficient than other benchmarked interpolation algorithms (eg. Kriging, RBF), it can take a little longer than points plotting. Consider using `-n` option to best utilize available CPU cores, and `--fast` for slightly lower resolution. 
 
 You can also supply SRF files and display them on the map too.
 
@@ -49,12 +50,11 @@ You may have non-numerical categorical data to plot.
 
 ![Screenshot from 2022-12-14 14-48-59](https://user-images.githubusercontent.com/466989/207485134-90d07cd0-4fc7-4798-b34d-e1c99514ffc5.png)
 
- ![plot_items_Vendors](https://user-images.githubusercontent.com/466989/207482322-93412ae0-46db-4bd5-994a-11223cdb598f.png)
-
-
-Note that this CSV file is not a standard IM csv, and has no `component` column. You can use `--no-component-column` option in this case.
-Specify a colormap that has a wide spectrum of different colours (eg. hsv). Each unique categorical value dynamically gets assigned a color. 
+Note that this CSV file is not a standard IM csv, and has no `component` column. You can use `--no-component-column` option to remedy this.
+Specify a colormap that has a wide spectrum of different colours (eg. hsv). Each unique category gets assigned a color dynamically. 
 To try out a different color map, see https://matplotlib.org/stable/tutorials/colors/colormaps.html
+
+ ![plot_items_Vendors](https://user-images.githubusercontent.com/466989/207482322-93412ae0-46db-4bd5-994a-11223cdb598f.png)
 
 ```
  python plot_items.py popular_phones.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title "Most Popular Phone Vendors" --no-component-column --colormap hsv --categorical --column Vendors
@@ -80,7 +80,7 @@ Four different drawing modes are available.
 
 `--contours` can be added along size `--points` or `--surface`. While `--categorical` can not be mixed with others 
 
-Choose a drawing mode, and stick to default values. See the initial output, and exploring all the options to best-suit your plotting requirements.
+Choose a drawing mode, and stick to default values. See the initial output, and explore all the options to best-suit your plotting requirements.
 
 ```
 positional arguments:
