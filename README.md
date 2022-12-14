@@ -21,7 +21,8 @@ A station list file is made of three columns (lon, lat, station name) seperated 
  
   ![plot_items_PGA](https://user-images.githubusercontent.com/466989/207484539-1c96633d-f572-4e75-8d90-ec481f07587a.png)
  
- To display numerical point values, use `--points` drawing mode. If `--column` is not specified, it will plot all available columns. If multiple columns are plotted, you could use `-n NUM_CORES` to utilize multiple CPU cores.
+ To display numerical point values, use `--points` drawing mode. If `--column` is not specified, it will plot all available columns. If multiple columns are plotted, you could use `-n NUM_CORES` to utilize multiple CPU cores. 
+ If a valid IM type is plotted, it will automatically place a correct unit, eg) "g" for PGA and "cm/s" for PGV.
  
  ```
  python plot_items.py TeAnau_REL01.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title TeAnau --points --column PGA
