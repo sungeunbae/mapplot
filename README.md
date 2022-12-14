@@ -1,13 +1,13 @@
 # mapplot
 # Introduction
 
-Plots numerical/categorical values on the map utilizing matplotlib/geopandas. Not dependent on GMT.
-
-Takes an IM csv (or it can be a generic CSV. To be discussed later) file, and a station list file.
+Plots numerical/categorical values on the map based on matplotlib/geopandas. Not dependent on GMT, and can utilize myriads of other Python visualisation tools. It does not need intermediate steps to create an input file - a CSV file can be directly fed to execute.
 
 ## Input
+Two mandatory input files are needed.
+
 ### IM csv
-An IM csv file is made of two index columns (station name, compoment) followed by various IM columns (eg. PGV, PGA etc).
+An IM csv file (or it can be a generic CSV. To be discussed later) is made of two index columns (station name, compoment) followed by various IM columns (eg. PGV, PGA etc).
 
  ![Screenshot from 2022-12-14 14-16-37](https://user-images.githubusercontent.com/466989/207481131-f2a2fde3-d5eb-44b2-97c9-6087efdb3113.png)
 ### Station list file 
