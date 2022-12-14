@@ -53,7 +53,7 @@ You may have non-numerical categorical data to plot.
 
 
 Note that this CSV file is not a standard IM csv, and has no `component` column. You can use `--no-component-column` option in this case.
-Specify a colormap that has wide spectrum of different colours (eg. hsv). Each unique categorical value dynamically gets assigned a color. 
+Specify a colormap that has a wide spectrum of different colours (eg. hsv). Each unique categorical value dynamically gets assigned a color. 
 To try out a different color map, see https://matplotlib.org/stable/tutorials/colors/colormaps.html
 
 ```
