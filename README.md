@@ -78,7 +78,7 @@ Four different drawing modes are available.
 (3) categorical 
 (4) contours 
 
-`--contours` can be added along size `--points` or `--surface`. While `--categorical` can not be mixed with others 
+`--contours` can be added alongside `--points` or `--surface`. While `--categorical` can not be mixed with other drawing types. 
 
 Choose a drawing mode, and stick to default values. See the initial output, and explore all the options to best-suit your plotting requirements.
 
