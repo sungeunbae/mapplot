@@ -11,11 +11,25 @@ A station list file is made of three columns (lon, lat, station name) seperated 
  
  # Examples
  
- ![plot_items_pSA_10p0](https://user-images.githubusercontent.com/466989/207482252-3be6ea2e-66a1-4915-be7b-2debdde2f018.png)
+  ![plot_items_PGA](https://user-images.githubusercontent.com/466989/207484539-1c96633d-f572-4e75-8d90-ec481f07587a.png)
  
+ To display numerical point values, try command like this.
+ ```
+ python plot_items.py TeAnau_REL01.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title TeAnau -n 4 --points --column PGA
+ ```
+ If `--column` is not specified, it will plot all available columns.
+ 
+ 
+ ![plot_items_pSA_10p0](https://user-images.githubusercontent.com/466989/207482252-3be6ea2e-66a1-4915-be7b-2debdde2f018.png)
+
+To display a surface instead of points, use `--surface` option. `--contour` option addes contour lines. As the surface is interpolated, it can take a little longer than points plotting. Consider using multiple cores with `-n` option, and `--fast` for slightly lower resolution.
+
+You can also supply SRF files and display them on the map too.
+
  ```
  python plot_items.py TeAnau_REL01.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title TeAnau -n 4 --fast --srf-file TeAnau_REL01.srf --surface --contours
  ```
+
  
  ![plot_items_Vendors](https://user-images.githubusercontent.com/466989/207482322-93412ae0-46db-4bd5-994a-11223cdb598f.png)
 
