@@ -23,6 +23,8 @@ A station list file is made of three columns (lon, lat, station name) seperated 
 ```
 numpy pandas scipy contextily geopandas matplotlib rasterio rioxarray shapely fiona
 ```
+4. Install qcore if not presently installed. https://github.com/ucgmsim/qcore
+
 
 # Examples
  
