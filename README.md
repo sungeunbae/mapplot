@@ -15,8 +15,11 @@ An IM csv file (or it can be a generic CSV - to be discussed later) is made of t
 A station list file is made of three columns (lon, lat, station name) seperated by a white space.
 
  ![Screenshot from 2022-12-14 14-22-10](https://user-images.githubusercontent.com/466989/207481959-f16cef91-1476-4a5e-bd18-96dc9ed70526.png)
- 
- # Examples
+
+# Installation
+Download NZ.tif from https://www.dropbox.com/s/lwq9o1z2wep4vq2/NZ10.tif?dl=0 and place it in the same path as `plot_items.py`.
+
+# Examples
  
  ## Numerical points
  
