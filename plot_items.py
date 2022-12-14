@@ -173,7 +173,6 @@ def get_args():
         "--disable-city-labels",
         dest="enable_city_labels",
         help="Flag to disable city_labels - these are plotted by default",
-        default=True,
         action="store_false",
     )
     arg(
@@ -225,7 +224,13 @@ def get_args():
         default=DEFAULT_CITY_FONT_SIZE,
     )
     arg(
-        "imcsv", help="path to im csv file"
+        "data_csv", help="Path to csv file to plot (eg. IM csv). Each line is station name, (optional: component), column_values... "
+    )
+
+    arg(
+        "--no-component-column", help="If data_csv doesn't have component column, set this option",
+        dest="has_component_column",
+        action="store_false"
     )
 
     arg(
@@ -433,7 +438,7 @@ def plot_srfs(ax, all_surfaces,all_rectangles,layer=LAYER_SRF):
                 ax.add_line(new_edge)
 
 
-def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
+def plot_column(xyv, colname, crs, clip_with, outdir, prefix,
                   title, height, width, aspect,
                   enable_city_labels=True,
                   region=None,
@@ -462,22 +467,22 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
 
                   fast=False,
                   nan_is=None):
-    # print(f"{im_name} {crs} {clip_with} {surface} {contours} {basemap} {local_basemap}")
+    # print(f"{colname} {crs} {clip_with} {surface} {contours} {basemap} {local_basemap}")
 
     # if not surface:
-    #     xyz = xyz.fillna(0)
+    #     xyv = xyv.fillna(0)
 
     if nan_is is None:  #NaN is removed
-        xyz = xyz.loc[xyz[im_name].notna()]
+        xyv = xyv.loc[xyv[colname].notna()]
     else:
-        # xyz = xyz.fillna(0) # no data gets 0
-        xyz=xyz.fillna(nan_is) #nan_is is already known to be float
+        # xyv = xyv.fillna(0) # no data gets 0
+        xyv=xyv.fillna(nan_is) #nan_is is already known to be float
 
 
-    xmin = xyz['lon'].min()
-    xmax = xyz['lon'].max()
-    ymin = xyz['lat'].min()
-    ymax = xyz['lat'].max()
+    xmin = xyv['lon'].min()
+    xmax = xyv['lon'].max()
+    ymin = xyv['lat'].min()
+    ymax = xyv['lat'].max()
 
     if region is not None:
         #crop to a larger area than specified first (for better interpolation). Crop to the exact dimension later
@@ -485,10 +490,10 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
         xmargin = (xmax-xmin)* 0.05
         ymargin = (ymax-ymin)* 0.05
 
-        xyz = xyz.loc[(xyz['lon'] >= xmin-xmargin) &
-                      (xyz['lon'] <= xmax+xmargin) &
-                      (xyz['lat'] >= ymin-ymargin) &
-                      (xyz['lat'] <= ymax+ymargin)]
+        xyv = xyv.loc[(xyv['lon'] >= xmin-xmargin) &
+                      (xyv['lon'] <= xmax+xmargin) &
+                      (xyv['lat'] >= ymin-ymargin) &
+                      (xyv['lat'] <= ymax+ymargin)]
 
 
 
@@ -497,22 +502,22 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
 
 
     if categorical:
-        uniq = list(set(xyz[im_name]))
+        uniq = list(set(xyv[colname]))
         cNorm = Normalize(vmin=0,vmax=len(uniq))
         scalarMap = ScalarMappable(norm=cNorm, cmap=cmap)
         for i in range(len(uniq)):
-            indx = (xyz[im_name] == uniq[i])
-            ax.scatter(xyz['lon'][indx], xyz['lat'][indx], s= point_size, color=scalarMap.to_rgba(i), alpha=surface_opacity, label=uniq[i])
-            plt.legend(title=im_name, title_fontsize=colorbar_font_size, fontsize=(colorbar_font_size-2), shadow=True,
+            indx = (xyv[colname] == uniq[i])
+            ax.scatter(xyv['lon'][indx], xyv['lat'][indx], s= point_size, color=scalarMap.to_rgba(i), alpha=surface_opacity, label=uniq[i])
+            plt.legend(title=colname, title_fontsize=colorbar_font_size, fontsize=(colorbar_font_size-2), shadow=True,
                        ncols=len(uniq), loc='lower center', bbox_to_anchor=(0.0,-0.12,1,0.05)) # push by 0.12 downwards
 
     else:
 
         if surface or contours:
 
-            llv_array = xyz[['lon', 'lat', im_name]].to_numpy()
+            llv_array = xyv[['lon', 'lat', colname]].to_numpy()
 
-            surface_tiff = outdir / f'surface_{im_name}.tif'
+            surface_tiff = outdir / f'surface_{colname}.tif'
             #rbf(llv_array, surface_tiff, {"init": crs}, fast=fast)
             tri_interp(llv_array, surface_tiff, {"init": crs}, fast=fast)
 
@@ -528,20 +533,24 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
 
 
         if points:
-            geometry = [Point(xy) for xy in zip(xyz["lon"], xyz["lat"])]
-            geodata = gpd.GeoDataFrame(xyz, crs=crs,geometry=geometry)
-            geodata.plot(im_name, ax=ax, legend=False, markersize=point_size, cmap=cmap)  # draw points, no default colorbar
+            geometry = [Point(xy) for xy in zip(xyv["lon"], xyv["lat"])]
+            geodata = gpd.GeoDataFrame(xyv, crs=crs,geometry=geometry)
+            geodata.plot(colname, ax=ax, legend=False, markersize=point_size, cmap=cmap)  # draw points, no default colorbar
 
         # Place a custom colorbar
         cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
-        cNorm = ScalarMappable(norm=Normalize(vmin=xyz[im_name].min(), vmax=xyz[im_name].max()), cmap=cmap)
+        cNorm = ScalarMappable(norm=Normalize(vmin=xyv[colname].min(), vmax=xyv[colname].max()), cmap=cmap)
         cbar = plt.colorbar(mappable=cNorm, ax=ax, cax=cax, orientation="horizontal", ticklocation='bottom', shrink=0.8)
 
-        #TODO: it may not be a valid IM
-        imname_prefix = im_name.split("_")[0]  # in case we have pSA_0.1 etc
-        unit = IM(imname_prefix).get_unit() # get the unit for this IM type
+        imname_prefix = colname.split("_")[0]  # in case we have pSA_0.1 etc
+        try:
+            unit = IM(imname_prefix).get_unit() # get the unit for this IM type
+        except KeyError: # may not be a recognized IM type.
+            unit_text = ""
+        else:
+            unit_text = f"({unit})"
 
-        cbar.set_label(f"{im_name} ({unit})", fontsize=colorbar_font_size)
+        cbar.set_label(f"{colname} {unit_text}", fontsize=colorbar_font_size)
 
 
     if basemap:
@@ -553,7 +562,7 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
             # _ = cx.bounds2raster(w, s, e, n,ll=True, zoom=10, path="NZ10.tif",
             # source=cx.providers.Stamen.TerrainBackground)
 
-            # Possible Map styles are here: https://xyzservices.readthedocs.io/en/stable/gallery.html
+            # Possible Map styles are here: https://xyvservices.readthedocs.io/en/stable/gallery.html
         else:  # Download map from online (slow and quality may be low)
             cx.add_basemap(ax, crs=crs, source=cx.providers.Stamen.TerrainBackground, zoom="auto")
 
@@ -575,7 +584,7 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
     ax.set_ybound(lower=ymin, upper=ymax)
 
     # Make sure file name doesn't have confusing dots.
-    im_name_p = im_name.replace(".", "p")
+    colname_p = colname.replace(".", "p")
 
 
     # If image should be added to the map, do here
@@ -585,7 +594,7 @@ def plot_im(xyz, im_name, crs, clip_with, outdir, prefix,
     # Set the aspect as specified.
     ax.set_aspect(aspect)
     fig.tight_layout()
-    fig.savefig(outdir / f"{prefix}_{im_name_p}.png")
+    fig.savefig(outdir / f"{prefix}_{colname_p}.png")
     plt.close(fig)
 
 
@@ -602,14 +611,13 @@ def plot_image(ax, imagefile, lon, lat, zoom=1, layer=LAYER_IMAGE): #zoom = 1 is
     ax.add_artist(ab)
 
 if __name__ == "__main__":
-#    rasterCrs = CRS.from_epsg(4326)
-    crs = 'EPSG:4326'
+    crs = 'EPSG:4326' # projection
 
     args = get_args()
     print(f"Using {args.nproc} CPU cores")
 
-    ims_df = pd.read_csv(args.imcsv, index_col=0)
-    stations = pd.read_csv(args.station_file, sep=' ', header=None,
+    data_df = pd.read_csv(args.data_csv, index_col=0) # each line is station_name, (optional: component), column_values...
+    stations = pd.read_csv(args.station_file, sep=args.station_sep, header=None,
                            index_col=2, names=['lon', 'lat', 'station'])
 
     output_prefix = Path(args.output_prefix)
@@ -617,23 +625,29 @@ if __name__ == "__main__":
     out_dir = output_prefix.parent.resolve()
     out_dir.mkdir(exist_ok=True)
 
-    ims = list(ims_df.columns)[1:]  # [1:] to remove component column
-    assert args.comp in set(ims_df.component), f"Specified component {args.comp} is unavailable in {args.imcsv}"
-    ims_with_one_comp=ims_df[ims_df.component==args.comp] # select the specified component
-    print(f"Plotting component {args.comp}")
+    column_names = list(data_df.columns)
 
-    ims_to_plot = []
+    if args.has_component_column: # Typical IM.csv
+        column_names.remove("component")
+        assert args.comp in set(data_df.component), f"Specified component {args.comp} is unavailable in {args.data_csv}"
+        data_to_plot_df=data_df[data_df.component==args.comp] # select the specified component
+        print(f"Plotting component {args.comp}")
+    else: # generic data CSV with each line  
+        column_names = list(data_df.columns)
+        data_to_plot_df=data_df
+
+    columns_to_plot = []
     if args.column is None:
-        ims_to_plot = ims
+        columns_to_plot = column_names
     else:
         for colname in set(args.column): # remove duplicates
-            if colname in ims:
-                ims_to_plot.append(colname)
+            if colname in column_names:
+                columns_to_plot.append(colname)
             else:
                 print(f"Warning: No such column present: {colname}")
-    print(f"Columns to plot: {ims_to_plot}")
+    print(f"Columns to plot: {columns_to_plot}")
 
-    xyz_df = ims_with_one_comp.join(stations, how='right')[['lon', 'lat'] + ims_to_plot]  # joining 2 dataframes on index "station" name.
+    xyv_df = data_to_plot_df.join(stations, how='right')[['lon', 'lat'] + columns_to_plot]  # joining 2 dataframes on index "station" name.
 
     coastlines_polygon = gpd.read_file(COASTLINES_TOPO_POLYGON)
 
@@ -645,7 +659,7 @@ if __name__ == "__main__":
         srf_surfaces, srf_outlines = pre_plot_srfs(args.srf_file,out_dir, crs=crs, res=0.001, outline_only=args.srf_only_outline, outline_color=args.srf_outline_color)
 
 
-    pfn = partial(plot_im, xyz_df, crs=crs, clip_with=coastlines_polygon.geometry.values,
+    pfn = partial(plot_column, xyv_df, crs=crs, clip_with=coastlines_polygon.geometry.values,
                   outdir=out_dir, prefix=basename,
                   title=args.title,
                   height=args.map_height,
@@ -677,9 +691,9 @@ if __name__ == "__main__":
 
     # Parallel
     with Pool(args.nproc) as pool:
-        plot_properties = pool.map_async(pfn, ims_to_plot)
+        plot_properties = pool.map_async(pfn, columns_to_plot)
         plot_properties = plot_properties.get()
 
     # Serial
-    # for im in ims[10:]:
+    # for im in columns_to_plot:
     #     pfn(im)
