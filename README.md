@@ -19,7 +19,7 @@ A station list file is made of three columns (lon, lat, station name) seperated 
 # Installation
 1. `git clone https://github.com/sungeunbae/mapplot.git`
 2. Download basemap file and place it in the same path as `plot_items.py`.
-* NZ : https://www.dropbox.com/s/lwq9o1z2wep4vq2/NZ10.tif?dl=0 and 
+* NZ : https://www.dropbox.com/s/lwq9o1z2wep4vq2/NZ10.tif?dl=0
 * Japan: https://www.dropbox.com/s/eplw68s9i3dnpq2/JAPAN09.tif?dl=0
 * South Korea: https://www.dropbox.com/s/u5nhkabobwbzmpv/KOREA10.tif?dl=0
 
