@@ -22,7 +22,8 @@ A station list file is made of three columns (lon, lat, station name) seperated 
  
  ![plot_items_pSA_10p0](https://user-images.githubusercontent.com/466989/207482252-3be6ea2e-66a1-4915-be7b-2debdde2f018.png)
 
-To display a surface instead of points, use `--surface` option. `--contour` option addes contour lines. As the surface is interpolated, it can take a little longer than points plotting. Consider using multiple cores with `-n` option, and `--fast` for slightly lower resolution.
+To display a surface instead of points, use `--surface` option. `--contour` option adds contour lines. 
+As the surface is interpolated, it can take a little longer than points plotting. Consider using multiple cores with `-n` option, and `--fast` for slightly lower resolution.
 
 You can also supply SRF files and display them on the map too.
 
@@ -30,11 +31,14 @@ You can also supply SRF files and display them on the map too.
  python plot_items.py TeAnau_REL01.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title TeAnau -n 4 --fast --srf-file TeAnau_REL01.srf --surface --contours
  ```
 
- 
+You may have non-numerical categorical data to plot. 
+![Screenshot from 2022-12-14 14-48-59](https://user-images.githubusercontent.com/466989/207485134-90d07cd0-4fc7-4798-b34d-e1c99514ffc5.png)
+
  ![plot_items_Vendors](https://user-images.githubusercontent.com/466989/207482322-93412ae0-46db-4bd5-994a-11223cdb598f.png)
 
+
 ```
-popular_phones.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title "Most Popular Phone Vendors" --colormap hsv --categorical --column Vendors
+ python plot_items.py popular_phones.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title "Most Popular Phone Vendors" --no-component-column --colormap hsv --categorical --column Vendors
 ```
 
 # Detailed Usages
