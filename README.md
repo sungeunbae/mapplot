@@ -7,7 +7,7 @@ Plots numerical/categorical values on the map based on matplotlib/geopandas/pand
 Two mandatory input files are needed.
 
 ### IM csv
-An IM csv file (or it can be a generic CSV - to be discussed later) is made of two index columns (station name, compoment) followed by various IM columns (eg. PGV, PGA etc).
+An IM csv file (or it can be a generic CSV - to be discussed later) is made of two index columns (station name, component) followed by various IM columns (eg. PGV, PGA etc).
 
  ![Screenshot from 2022-12-14 14-16-37](https://user-images.githubusercontent.com/466989/207481131-f2a2fde3-d5eb-44b2-97c9-6087efdb3113.png)
 
