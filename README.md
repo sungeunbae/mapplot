@@ -19,6 +19,8 @@ A station list file is made of three columns (lon, lat, station name) seperated 
 # Installation
 1. `git clone https://github.com/sungeunbae/mapplot.git`
 2. Download NZ.tif from https://www.dropbox.com/s/lwq9o1z2wep4vq2/NZ10.tif?dl=0 and place it in the same path as `plot_items.py`.
+For Japan, https://www.dropbox.com/s/eplw68s9i3dnpq2/JAPAN09.tif?dl=0
+For South Korea, https://www.dropbox.com/s/u5nhkabobwbzmpv/KOREA10.tif?dl=0
 3. Use pip or conda to install the following packages.
 ```
 numpy pandas scipy contextily geopandas matplotlib rasterio rioxarray shapely fiona
