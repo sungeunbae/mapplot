@@ -1,12 +1,18 @@
 # mapplot
 # Introduction
-Plots numerical/categorical values on the map. Takes an IM csv (or it can be a generic CSV. To be discussed later) file, and a station list file.
 
-An IM csv file is made of two columns (station name, compoment) followed by various IM columns (eg. PGV, PGA etc)
-A station list file is made of three columns (lon, lat, station name) seperated by a white space.
+Plots numerical/categorical values on the map utilizing matplotlib/geopandas. Not dependent on GMT.
+
+Takes an IM csv (or it can be a generic CSV. To be discussed later) file, and a station list file.
+
+## Input
+### IM csv
+An IM csv file is made of two index columns (station name, compoment) followed by various IM columns (eg. PGV, PGA etc).
 
  ![Screenshot from 2022-12-14 14-16-37](https://user-images.githubusercontent.com/466989/207481131-f2a2fde3-d5eb-44b2-97c9-6087efdb3113.png)
- 
+### Station list file 
+A station list file is made of three columns (lon, lat, station name) seperated by a white space.
+
  ![Screenshot from 2022-12-14 14-22-10](https://user-images.githubusercontent.com/466989/207481959-f16cef91-1476-4a5e-bd18-96dc9ed70526.png)
  
  # Examples
@@ -15,20 +21,20 @@ A station list file is made of three columns (lon, lat, station name) seperated 
  
   ![plot_items_PGA](https://user-images.githubusercontent.com/466989/207484539-1c96633d-f572-4e75-8d90-ec481f07587a.png)
  
- To display numerical point values, try command like this.
+ To display numerical point values, use `--points` drawing mode. If `--column` is not specified, it will plot all available columns. If multiple columns are plotted, you could use `-n NUM_CORES` to utilize multiple CPU cores.
  
  ```
- python plot_items.py TeAnau_REL01.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title TeAnau -n 4 --points --column PGA
+ python plot_items.py TeAnau_REL01.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title TeAnau --points --column PGA
  ```
  
- If `--column` is not specified, it will plot all available columns.
  
  ## Surface and contours, added SRF faults.
  
+ The input CSV file contains discrete points. However, you could interplate this and obtain a smooth 2D surface.
  ![plot_items_pSA_10p0](https://user-images.githubusercontent.com/466989/207482252-3be6ea2e-66a1-4915-be7b-2debdde2f018.png)
 
 To display a surface instead of points, use `--surface` option. `--contour` option adds contour lines. 
-As the surface is interpolated, it can take a little longer than points plotting. Consider using multiple cores with `-n` option, and `--fast` for slightly lower resolution.
+It uses Triangulation and LinearTriInterpolator for fast, yet nice looking surfaces. While this is generally more efficient than other benchmarked interpolation algorithms, it can take a little longer than points plotting. Consider using multiple cores with `-n` option to best utilize available CPU cores, and `--fast` for slightly lower resolution. 
 
 You can also supply SRF files and display them on the map too.
 
@@ -45,7 +51,9 @@ You may have non-numerical categorical data to plot.
  ![plot_items_Vendors](https://user-images.githubusercontent.com/466989/207482322-93412ae0-46db-4bd5-994a-11223cdb598f.png)
 
 
-Note that this CSV file is not standard IM csv, and has no `component` column. You can use `--no-component-column` option in this case.
+Note that this CSV file is not a standard IM csv, and has no `component` column. You can use `--no-component-column` option in this case.
+Specify a colormap that has wide spectrum of different colours (eg. hsv). Each unique categorical value dynamically gets assigned a color. 
+To try out a different color map, see https://matplotlib.org/stable/tutorials/colors/colormaps.html
 
 ```
  python plot_items.py popular_phones.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title "Most Popular Phone Vendors" --no-component-column --colormap hsv --categorical --column Vendors
@@ -63,11 +71,15 @@ usage: plot_items.py [-h] [-t TITLE] [-f OUTPUT_PREFIX] [-s SRF_FILE] [--srf-onl
                      data_csv station_file
 ```
 
-Four different drawing modes are available. (1) points (numerical values) (2) surface (2D interpolated from point data) (3) contours (4) categorical data
+Four different drawing modes are available. 
+(1) points (numerical values) 
+(2) surface (2D interpolated from point data) 
+(3) categorical 
+(4) contours 
 
-(1), (2) and (3) can be freely mixed, while (4) can not be mixed with others 
+`--contours` can be added along size `--points` or `--surface`. While `--categorical` can not be mixed with others 
 
-Other than `-n` and `--fast`, `-t` and `--points`, `--surface`, `--contours` and `--categorical`, you can try with default values first before exploring all the options.
+Choose a drawing mode, and stick to default values. See the initial output, and exploring all the options to best-suit your plotting requirements.
 
 ```
 positional arguments:
