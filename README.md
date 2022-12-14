@@ -45,6 +45,8 @@ You may have non-numerical categorical data to plot.
  ![plot_items_Vendors](https://user-images.githubusercontent.com/466989/207482322-93412ae0-46db-4bd5-994a-11223cdb598f.png)
 
 
+Note that this CSV file is not standard IM csv, and has no `component` column. You can use `--no-component-column` option in this case.
+
 ```
  python plot_items.py popular_phones.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title "Most Popular Phone Vendors" --no-component-column --colormap hsv --categorical --column Vendors
 ```
