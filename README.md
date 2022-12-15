@@ -92,14 +92,15 @@ cx.bounds2raster(w, s, e, n, ll=True, zoom=10, path="NZ10.tif", source=cx.provid
 ```
 
 Coastlines ESRI shapefile was extracted from GSHHG ftp://ftp.soest.hawaii.edu/gshhg/gshhg-shp-2.3.7.zip 
-It is perhaps not necessary, but QGIS can be used to clip the relevant area following these steps.
-1. Add a vector layer and import GSHHS_f_L1
-2. Create a new shapefile layer, right-click on the layer and select Toggle Editing. 
-3. Select Add Polygon Feature and draw the area covering the desired area.
-4. Vector > Geoprocessing tools > Clip. Select GSHHS_f_L1 layer as Input layer and the new layer as Output layer. 
-5. Export > Save Features as and save it as a ESRI Shapefile.
+GSHHS_f_L1.shp contains full resolution coastlines of most countries, and this can be used as itself. However, test proved that cropping out individual countries gives the best performance (15sec -> 0.15sec) for each IM. QGIS can be used to clip the relevant area following these steps.
 
-The original GSHHS_f_L1.shp can be used, but it will make the coastline clipping significant slower.
+1. Add a vector layer and import GSHHS_f_L1
+2. Create a new shapefile layer, give a name and choose "Polygon" for Geometry type.
+3. Right-click on the layer and select Toggle Editing. 
+4. Select Add Polygon Feature and draw the area covering the desired area.
+5. Vector > Geoprocessing tools > Clip. Select GSHHS_f_L1 layer as Input layer and the new layer as Output layer. 
+6. Export > Save Features as and save it as a ESRI Shapefile.
+
 
 city csv file is simply in this format.
 ```
