@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from copy import copy as cp_object
 import contextily as cx
+from enum import Enum
 from functools import partial
 import geopandas as gpd
 import math
@@ -24,12 +25,33 @@ from qcore.im import IM
 from qcore import srf, constants
 
 script_dir = Path(__file__).parent.resolve()
-COASTLINES_TOPO_POLYGON = (
-    script_dir / "nz_coastlines/nz-coastlines-topo-150k_polygon.shp"
-)
 
-DEFAULT_LOCAL_BASEMAP = script_dir / "NZ10.tif"
-DEFAULT_CITY_CSV = script_dir / "city.csv"
+# Supported countries, and country-specific data set
+
+COUNTRY = Enum('Country',['NZ','KR','JP'])
+COASTLINES_TOPO = {
+    'NZ' : script_dir / "data" / "coastlines" / "nz-coastlines-topo-150k_polygon.shp", # obtained from linz.govt.nz. Polygonized with QGIS
+    'KR' : script_dir / "data" / "coastlines" / "kr-jp-coastlines-topo-gshhg.shp", # obtained from gshhg-shp-2.3.7, cropped with QGIS
+    'JP' : script_dir / "data" / "coastlines" / "kr-jp-coastlines-topo-gshhg.shp"
+}
+
+BASEMAPS = {
+    'NZ' : script_dir / "data" / "basemap"/ "NZ10.tif", #
+    'KR' : script_dir / "data" / "basemap" / "KR10.tif",
+    'JP' : script_dir / "data" / "basemap" / "JP09.tif"
+}
+# these maps were obtained by the commands similar to below
+# w, s, e, n = (166,-48.5,178.5,-34)
+# cx.bounds2raster(w, s, e, n, ll=True, zoom=10, path="NZ10.tif", source=cx.providers.Stamen.TerrainBackground)
+# Possible Map styles are here: https://xyzservices.readthedocs.io/en/stable/gallery.html
+
+
+CITIES = {
+    'NZ': script_dir / "data" / "city_nz.csv",
+    'KR': script_dir / "data" / "city_kr.csv",
+    'JP': script_dir / "data" / "city_jp.csv"
+}
+
 
 DEFAULT_MAP_WIDTH = 12
 DEFAULT_MAP_HEIGHT = 15
@@ -123,11 +145,29 @@ def get_args():
         type=float,
         default=DEFAULT_PLOT_ASPECT,
     )
+
+    arg("--country", default="NZ", choices=[c.name for c in COUNTRY])
+
     arg(
         "--basemap",
         help="Path to the local basemap",
         type=Path,
-        default=DEFAULT_LOCAL_BASEMAP,
+        default=None,
+    )
+
+    arg("--coastline", type=Path, help="ESRI shapefile (multipolygon) of coastline definition", default=None)
+
+    arg(
+        "--city-csv",
+        help="City locations CSV file: name, lon, lat",
+        type=Path,
+        default=None,
+    )
+    arg(
+        "--disable-city-labels",
+        dest="enable_city_labels",
+        help="Flag to disable city_labels - these are plotted by default",
+        action="store_false",
     )
 
     arg(
@@ -201,18 +241,7 @@ def get_args():
         default=DEFAULT_SURFACE_OPACITY,
     )
 
-    arg(
-        "--disable-city-labels",
-        dest="enable_city_labels",
-        help="Flag to disable city_labels - these are plotted by default",
-        action="store_false",
-    )
-    arg(
-        "--city-csv",
-        help="City locations CSV file: name, lon, lat",
-        type=Path,
-        default=DEFAULT_CITY_CSV,
-    )
+
 
     arg("-n", "--nproc", help="max number of processes", type=int, default=1)
 
@@ -260,6 +289,7 @@ def get_args():
 
     arg("--station-sep", default=" ", help="the delimiter used in the station file")
 
+
     args = parser.parse_args()
 
     if args.region is not None:
@@ -284,6 +314,16 @@ def get_args():
         if not args.surface and not args.contours and not args.points:
             print("Warning: No drawing mode selected. Points are displayed.")
             args.points = True
+
+
+    # if country specific arguments are not specified, use default ones.
+
+    if args.coastline is None:
+        args.coastline = COASTLINES_TOPO[args.country]
+    if args.basemap is None:
+        args.basemap = BASEMAPS[args.country]
+    if args.city_csv is None:
+        args.city_csv = CITIES[args.country]
 
     return args
 
@@ -521,9 +561,9 @@ def plot_column(
     srf_surfaces=[],
     srf_outlines=[],
     # other things to add to the map
-    city_csv=DEFAULT_CITY_CSV,
+    city_csv=CITIES['NZ'],
     basemap=True,
-    local_basemap=DEFAULT_LOCAL_BASEMAP,
+    basemap_path=BASEMAPS['NZ'],
     # drawing style
     point_size=DEFAULT_POINT_SIZE,
     contour_levels=DEFAULT_CONTOUR_LEVELS,
@@ -648,15 +688,10 @@ def plot_column(
         cbar.set_label(f"{colname} {unit_text}", fontsize=colorbar_font_size)
 
     if basemap:
-        if local_basemap is not None:
-            cx.add_basemap(ax, crs=crs, source=local_basemap, zoom=8)  # add basemap
+        if basemap_path is not None:
+            cx.add_basemap(ax, crs=crs, source=basemap_path, zoom=8)  # add basemap
 
-            # this map was obtained by the following lines
-            # w, s, e, n = (166,-48.5,178.5,-34)
-            # _ = cx.bounds2raster(w, s, e, n,ll=True, zoom=10, path="NZ10.tif",
-            # source=cx.providers.Stamen.TerrainBackground)
 
-            # Possible Map styles are here: https://xyzservices.readthedocs.io/en/stable/gallery.html
         else:  # Download map from online (slow and quality may be low)
             cx.add_basemap(
                 ax, crs=crs, source=cx.providers.Stamen.TerrainBackground, zoom="auto"
@@ -760,7 +795,7 @@ if __name__ == "__main__":
         ["lon", "lat"] + columns_to_plot
     ]  # joining 2 dataframes on index "station" name.
 
-    coastlines_polygon = gpd.read_file(COASTLINES_TOPO_POLYGON)
+    coastlines_polygon = gpd.read_file(args.coastline)
 
     srf_surfaces = []
     srf_outlines = []
@@ -805,6 +840,7 @@ if __name__ == "__main__":
         srf_surfaces=srf_surfaces,
         srf_outlines=srf_outlines,
         srf_colormap=args.srf_colormap,
+        basemap_path= args.basemap,
         city_csv=args.city_csv,
         fast=args.fast,
         nan_is=args.nan_is,
