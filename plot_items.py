@@ -20,6 +20,7 @@ import rasterio
 from rasterio.transform import Affine
 import rioxarray
 from shapely.geometry import Point
+import time
 
 from qcore.im import IM
 from qcore import srf, constants
@@ -27,11 +28,12 @@ from qcore import srf, constants
 script_dir = Path(__file__).parent.resolve()
 
 # Supported countries, and country-specific data set
-
 COUNTRY = Enum('Country',['NZ','KR','JP'])
+
+# Obtained from gshhg-shp-2.3.7, cropped with QGIS. Much faster than using the original. See README for details.
 COASTLINES_TOPO = {
-    'NZ' : script_dir / "data" / "coastlines" / "nz-coastlines-topo-150k_polygon.shp", # obtained from linz.govt.nz. Polygonized with QGIS
-    'KR' : script_dir / "data" / "coastlines" / "kr-jp-coastlines-topo-gshhg.shp", # obtained from gshhg-shp-2.3.7, cropped with QGIS
+    'NZ' : script_dir / "data" / "coastlines" / "nz-coastlines-topo-gshhg.shp",
+    'KR' : script_dir / "data" / "coastlines" / "kr-jp-coastlines-topo-gshhg.shp",
     'JP' : script_dir / "data" / "coastlines" / "kr-jp-coastlines-topo-gshhg.shp"
 }
 
@@ -637,10 +639,14 @@ def plot_column(
             # rbf(llv_array, surface_tiff, {"init": crs}, fast=fast)
             tri_interp(llv_array, surface_tiff, {"init": crs}, fast=fast)
 
+            print(f"Clipping starts")
+
+            begin=time.time()
             # clipped: xarray.DataArray
             clipped = rioxarray.open_rasterio(surface_tiff, masked=True).rio.clip(
                 clip_with, crs, drop=False
             )
+            print(f"Clipping completed {time.time()-begin} secs")
             if contours:
                 clipped[0].plot.contour(
                     ax=ax,
