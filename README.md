@@ -91,7 +91,8 @@ w, s, e, n = (166,-48.5,178.5,-34)
 cx.bounds2raster(w, s, e, n, ll=True, zoom=10, path="NZ10.tif", source=cx.providers.Stamen.TerrainBackground)
 ```
 
-Coastlines ESRI shapefile was extracted from GSHHG ftp://ftp.soest.hawaii.edu/gshhg/gshhg-shp-2.3.7.zip 
+Coastlines ESRI shapefile was extracted from GSHHG (https://www.soest.hawaii.edu/pwessel/gshhg/) data downloaded from this link: http://www.soest.hawaii.edu/pwessel/gshhg/gshhg-shp-2.3.7.zip
+
 GSHHS_f_L1.shp contains full resolution coastlines of most countries, and this can be used as itself. However, test proved that cropping out individual countries gives the best performance (15sec -> 0.15sec) for each IM. QGIS can be used to clip the relevant area following these steps.
 
 1. Add a vector layer and import GSHHS_f_L1
