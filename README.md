@@ -74,15 +74,54 @@ To try out a different color map, see https://matplotlib.org/stable/tutorials/co
  python plot_items.py popular_phones.csv non_uniform_whole_nz_with_real_stations-hh400_v20p3_land.ll --title "Most Popular Phone Vendors" --no-component-column --colormap hsv --categorical --column Vendors
 ```
 
+## Support for other countries
+By default, it works with NZ, but you can switch to other countires (currently, KR and JP are supported) with `--country` option.
+![plot_items_PGA](https://user-images.githubusercontent.com/466989/207758667-6c906774-c491-4219-815a-58c40fb498f2.png)
+
+```
+python plot_items.py Pohang.csv Busan_2km_stats_20211001.ll --title Pohang -n 4 --surface-opacity 0.6 --surface --contours --column PGA --country KR --fast
+```
+One can extend the support for other countries by adding basemap, coastlines ESRI shapefile, and a city csv file.
+
+A basemap can be easily obtained by 
+
+```
+import contextily as cx
+w, s, e, n = (166,-48.5,178.5,-34)
+cx.bounds2raster(w, s, e, n, ll=True, zoom=10, path="NZ10.tif", source=cx.providers.Stamen.TerrainBackground)
+```
+
+Coastlines ESRI shapefile was extracted from GSHHG ftp://ftp.soest.hawaii.edu/gshhg/gshhg-shp-2.3.7.zip 
+It is perhaps not necessary, but QGIS can be used to clip the relevant area following these steps.
+1. Add a vector layer and import GSHHS_f_L1
+2. Create a new shapefile layer, right-click on the layer and select Toggle Editing. 
+3. Select Add Polygon Feature and draw the area covering the desired area.
+4. Vector > Geoprocessing tools > Clip. Select GSHHS_f_L1 layer as Input layer and the new layer as Output layer. 
+5. Export > Save Features as and save it as a ESRI Shapefile.
+
+city csv file is simply in this format.
+```
+name,lon,lat
+Christchurch,172.63622540000006,-43.5320544
+Wellington, 174.77623600000004, -41.2864603
+Auckland, 174.76333150000005, -36.8484597
+New Plymouth, 174.0752278, -39.0556253
+Rotorua, 176.249746, 38.136848
+Taupo, 176.070447, -38.684286
+...
+```
+
 # Detailed Usages
 
 ```
-usage: plot_items.py [-h] [-t TITLE] [-f OUTPUT_PREFIX] [-s SRF_FILE] [--srf-only-outline] [--srf-outline-color SRF_OUTLINE_COLOR] [--srf-outline-width SRF_OUTLINE_WIDTH] [--srf-colormap SRF_COLORMAP]
-                     [--map-height MAP_HEIGHT] [--map-width MAP_WIDTH] [--map-aspect MAP_ASPECT] [--basemap BASEMAP] [--column COLUMN] [-r REGION]
-                     [--comp {090,000,ver,H1,H2,geom,rotd50,rotd100,rotd100_50,norm,EAS}] [--colormap COLORMAP] [--categorical] [--points] [--contours] [--point-size POINT_SIZE]
-                     [--contour-levels CONTOUR_LEVELS] [--contour-line-width CONTOUR_LINE_WIDTH] [--contour-line-color CONTOUR_LINE_COLOR] [--surface] [--surface-opacity SURFACE_OPACITY]
-                     [--disable-city-labels] [--city-csv CITY_CSV] [-n NPROC] [--fast] [--nan-is NAN_IS] [--axis-font-size AXIS_FONT_SIZE] [--title-font-size TITLE_FONT_SIZE]
-                     [--colorbar-font-size COLORBAR_FONT_SIZE] [--city-font-size CITY_FONT_SIZE] [--no-component-column] [--station-sep STATION_SEP]
+usage: plot_items.py [-h] [-t TITLE] [-f OUTPUT_PREFIX] [-s SRF_FILE] [--srf-only-outline] [--srf-outline-color SRF_OUTLINE_COLOR]
+                     [--srf-outline-width SRF_OUTLINE_WIDTH] [--srf-colormap SRF_COLORMAP] [--map-height MAP_HEIGHT] [--map-width MAP_WIDTH] [--map-aspect MAP_ASPECT]
+                     [--country {NZ,KR,JP}] [--basemap BASEMAP] [--coastline COASTLINE] [--city-csv CITY_CSV] [--disable-city-labels] [--column COLUMN] [-r REGION]
+                     [--comp {090,000,ver,H1,H2,geom,rotd50,rotd100,rotd100_50,norm,EAS}] [--colormap COLORMAP] [--categorical] [--points] [--contours]
+                     [--point-size POINT_SIZE] [--contour-levels CONTOUR_LEVELS] [--contour-line-width CONTOUR_LINE_WIDTH] [--contour-line-color CONTOUR_LINE_COLOR]
+                     [--surface] [--surface-opacity SURFACE_OPACITY] [-n NPROC] [--fast] [--nan-is NAN_IS] [--axis-font-size AXIS_FONT_SIZE]
+                     [--title-font-size TITLE_FONT_SIZE] [--colorbar-font-size COLORBAR_FONT_SIZE] [--city-font-size CITY_FONT_SIZE] [--no-component-column]
+                     [--station-sep STATION_SEP]
                      data_csv station_file
 ```
 
@@ -97,6 +136,8 @@ Four different drawing modes are available.
 Choose a drawing mode, and stick to default values. See the initial output, and explore all the options to best-suit your plotting requirements.
 
 ```
+
+
 positional arguments:
   data_csv              Path to csv file to plot (eg. IM csv). Each line is station name, (optional: component), column_values...
   station_file          station list file. name, lon, lat with a space as the delimiter by default
@@ -122,7 +163,13 @@ optional arguments:
                         Width of the output map in inches
   --map-aspect MAP_ASPECT
                         Aspect of Height / Width of the plotted map
+  --country {NZ,KR,JP}
   --basemap BASEMAP     Path to the local basemap
+  --coastline COASTLINE
+                        ESRI shapefile (multipolygon) of coastline definition
+  --city-csv CITY_CSV   City locations CSV file: name, lon, lat
+  --disable-city-labels
+                        Flag to disable city_labels - these are plotted by default
   --column COLUMN       Column names to plot. If unspecified, all included. Repeat as needed
   -r REGION, --region REGION
                         Region to plot in the form min_lon/max_lon/min_lat/max_lat.
@@ -143,9 +190,6 @@ optional arguments:
   --surface             interpolated grid surface
   --surface-opacity SURFACE_OPACITY
                         overlay opacity: transparent(0) - opaque(1)
-  --disable-city-labels
-                        Flag to disable city_labels - these are plotted by default
-  --city-csv CITY_CSV   City locations CSV file: name, lon, lat
   -n NPROC, --nproc NPROC
                         max number of processes
   --fast                Run faster with less resolution for interpolated surface
@@ -158,5 +202,6 @@ optional arguments:
                         If data_csv doesn't have component column, set this option
   --station-sep STATION_SEP
                         the delimiter used in the station file
+
 ```
  
