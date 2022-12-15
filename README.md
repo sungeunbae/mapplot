@@ -99,6 +99,8 @@ It is perhaps not necessary, but QGIS can be used to clip the relevant area foll
 4. Vector > Geoprocessing tools > Clip. Select GSHHS_f_L1 layer as Input layer and the new layer as Output layer. 
 5. Export > Save Features as and save it as a ESRI Shapefile.
 
+The original GSHHS_f_L1.shp can be used, but it will make the coastline clipping significant slower.
+
 city csv file is simply in this format.
 ```
 name,lon,lat
