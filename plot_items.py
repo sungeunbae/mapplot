@@ -28,19 +28,19 @@ from qcore import srf, constants
 script_dir = Path(__file__).parent.resolve()
 
 # Supported countries, and country-specific data set
-COUNTRY = Enum('Country',['NZ','KR','JP'])
+COUNTRY = Enum("Country", ["NZ", "KR", "JP"])
 
 # Obtained from gshhg-shp-2.3.7, cropped with QGIS. Much faster than using the original. See README for details.
 COASTLINES_TOPO = {
-    'NZ' : script_dir / "data" / "coastlines" / "nz-coastlines-topo-gshhg.shp",
-    'KR' : script_dir / "data" / "coastlines" / "kr-jp-coastlines-topo-gshhg.shp",
-    'JP' : script_dir / "data" / "coastlines" / "kr-jp-coastlines-topo-gshhg.shp"
+    "NZ": script_dir / "data" / "coastlines" / "nz-coastlines-topo-gshhg.shp",
+    "KR": script_dir / "data" / "coastlines" / "kr-jp-coastlines-topo-gshhg.shp",
+    "JP": script_dir / "data" / "coastlines" / "kr-jp-coastlines-topo-gshhg.shp",
 }
 
 BASEMAPS = {
-    'NZ' : script_dir / "data" / "basemap"/ "NZ10.tif", #
-    'KR' : script_dir / "data" / "basemap" / "KR10.tif",
-    'JP' : script_dir / "data" / "basemap" / "JP09.tif"
+    "NZ": script_dir / "data" / "basemap" / "NZ10.tif",  #
+    "KR": script_dir / "data" / "basemap" / "KR10.tif",
+    "JP": script_dir / "data" / "basemap" / "JP09.tif",
 }
 # these maps were obtained by the commands similar to below
 # w, s, e, n = (166,-48.5,178.5,-34)
@@ -49,9 +49,9 @@ BASEMAPS = {
 
 
 CITIES = {
-    'NZ': script_dir / "data" / "city_nz.csv",
-    'KR': script_dir / "data" / "city_kr.csv",
-    'JP': script_dir / "data" / "city_jp.csv"
+    "NZ": script_dir / "data" / "city_nz.csv",
+    "KR": script_dir / "data" / "city_kr.csv",
+    "JP": script_dir / "data" / "city_jp.csv",
 }
 
 
@@ -151,13 +151,15 @@ def get_args():
     arg("--country", default="NZ", choices=[c.name for c in COUNTRY])
 
     arg(
-        "--basemap",
-        help="Path to the local basemap",
-        type=Path,
-        default=None,
+        "--basemap", help="Path to the local basemap", type=Path, default=None,
     )
 
-    arg("--coastline", type=Path, help="ESRI shapefile (multipolygon) of coastline definition", default=None)
+    arg(
+        "--coastline",
+        type=Path,
+        help="ESRI shapefile (multipolygon) of coastline definition",
+        default=None,
+    )
 
     arg(
         "--city-csv",
@@ -243,8 +245,6 @@ def get_args():
         default=DEFAULT_SURFACE_OPACITY,
     )
 
-
-
     arg("-n", "--nproc", help="max number of processes", type=int, default=1)
 
     arg(
@@ -291,7 +291,6 @@ def get_args():
 
     arg("--station-sep", default=" ", help="the delimiter used in the station file")
 
-
     args = parser.parse_args()
 
     if args.region is not None:
@@ -316,7 +315,6 @@ def get_args():
         if not args.surface and not args.contours and not args.points:
             print("Warning: No drawing mode selected. Points are displayed.")
             args.points = True
-
 
     # if country specific arguments are not specified, use default ones.
 
@@ -563,9 +561,9 @@ def plot_column(
     srf_surfaces=[],
     srf_outlines=[],
     # other things to add to the map
-    city_csv=CITIES['NZ'],
+    city_csv=CITIES["NZ"],
     basemap=True,
-    basemap_path=BASEMAPS['NZ'],
+    basemap_path=BASEMAPS["NZ"],
     # drawing style
     point_size=DEFAULT_POINT_SIZE,
     contour_levels=DEFAULT_CONTOUR_LEVELS,
@@ -641,7 +639,7 @@ def plot_column(
 
             print(f"Clipping starts")
 
-            begin=time.time()
+            begin = time.time()
             # clipped: xarray.DataArray
             clipped = rioxarray.open_rasterio(surface_tiff, masked=True).rio.clip(
                 clip_with, crs, drop=False
@@ -696,7 +694,6 @@ def plot_column(
     if basemap:
         if basemap_path is not None:
             cx.add_basemap(ax, crs=crs, source=basemap_path, zoom=8)  # add basemap
-
 
         else:  # Download map from online (slow and quality may be low)
             cx.add_basemap(
@@ -846,7 +843,7 @@ if __name__ == "__main__":
         srf_surfaces=srf_surfaces,
         srf_outlines=srf_outlines,
         srf_colormap=args.srf_colormap,
-        basemap_path= args.basemap,
+        basemap_path=args.basemap,
         city_csv=args.city_csv,
         fast=args.fast,
         nan_is=args.nan_is,
