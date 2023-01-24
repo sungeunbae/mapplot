@@ -524,9 +524,9 @@ def plot_srfs(
                 ax.add_line(new_edge)
 
 
-def plot_column(
-    xyv_df,
-    colname,
+def render_slice(
+    xyys,
+    timestamp,
     crs,
     clip_with,
     outdir,
@@ -568,11 +568,15 @@ def plot_column(
     nan_is=None,
 ):
 
-    if nan_is is None:  # NaN is removed
-        xyv_df = xyv_df.loc[xyv_df[colname].notna()]
-    else:
-        # xyv_df = xyv_df.fillna(0) # no data gets 0
-        xyv_df = xyv_df.fillna(nan_is)  # nan_is is already known to be float
+    # if nan_is is None:  # NaN is removed
+    #     xyv_df = xyv_df.loc[xyv_df[colname].notna()]
+    # else:
+    #     # xyv_df = xyv_df.fillna(0) # no data gets 0
+    #     xyv_df = xyv_df.fillna(nan_is)  # nan_is is already known to be float
+
+    llv_array = xyts.tslice_get(timestamp, comp=-1)
+    colnames = ['lon', 'lat', 'value']
+    xyv_df = pd.DataFrame(llv_array, index=None, columns=colnames)
 
     min_lon = xyv_df["lon"].min()
     max_lon = xyv_df["lon"].max()
@@ -594,90 +598,59 @@ def plot_column(
 
     fig, ax = plt.subplots(figsize=(width, height))
 
-    if categorical:
-        uniq = list(set(xyv_df[colname]))
-        cNorm = Normalize(vmin=0, vmax=len(uniq))
-        scalarMap = ScalarMappable(norm=cNorm, cmap=cmap)
-        for i in range(len(uniq)):
-            indx = xyv_df[colname] == uniq[i]
-            ax.scatter(
-                xyv_df["lon"][indx],
-                xyv_df["lat"][indx],
-                s=point_size,
-                color=scalarMap.to_rgba(i),
-                alpha=surface_opacity,
-                label=uniq[i],
-            )
-            plt.legend(
-                title=colname,
-                title_fontsize=colorbar_font_size,
-                fontsize=(colorbar_font_size - 2),
-                shadow=True,
-                ncols=len(uniq),
-                loc="lower center",
-                bbox_to_anchor=(0.0, -0.12, 1, 0.05),
-            )  # push by 0.12 downwards
 
-    else:
-        if surface or contours:
-            llv_array = xyv_df[["lon", "lat", colname]].to_numpy()
-            surface_tiff = outdir / f"surface_{colname}.tif"
-            # rbf(llv_array, surface_tiff, {"init": crs}, fast=fast)
-            tri_interp(llv_array, surface_tiff, {"init": crs}, fast=fast)
+    if surface or contours:
 
-            print(f"Clipping starts")
+        surface_tiff = outdir / f"ts_{timestamp:05d}.tif"
+        # rbf(llv_array, surface_tiff, {"init": crs}, fast=fast)
+        tri_interp(llv_array, surface_tiff, {"init": crs}, fast=fast)
 
-            begin = time.time()
-            # clipped: xarray.DataArray
-            clipped = rioxarray.open_rasterio(surface_tiff, masked=True).rio.clip(
-                clip_with, crs, drop=False
-            )
-            print(f"Clipping completed {time.time()-begin} secs")
-            if contours:
-                clipped[0].plot.contour(
-                    ax=ax,
-                    colors=[contour_line_color],
-                    linewidths=[contour_line_width],
-                    levels=contour_levels,
-                )  # draw contour
+        print(f"Clipping starts")
 
-            if surface:
-                # render clipped surface
-                clipped[0].plot.pcolormesh(
-                    ax=ax, cmap=cmap, alpha=surface_opacity, add_colorbar=False
-                )  # add custom colorbar below
-
-        if points:
-            geometry = [Point(xy) for xy in zip(xyv_df["lon"], xyv_df["lat"])]
-            geodata = gpd.GeoDataFrame(xyv_df, crs=crs, geometry=geometry)
-            geodata.plot(
-                colname, ax=ax, legend=False, markersize=point_size, cmap=cmap
-            )  # draw points, no default colorbar
-
-        # Place a custom colorbar
-        cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
-        cNorm = ScalarMappable(
-            norm=Normalize(vmin=xyv_df[colname].min(), vmax=xyv_df[colname].max()),
-            cmap=cmap,
+        begin = time.time()
+        # clipped: xarray.DataArray
+        clipped = rioxarray.open_rasterio(surface_tiff, masked=True).rio.clip(
+            clip_with, crs, drop=False
         )
-        cbar = plt.colorbar(
-            mappable=cNorm,
-            ax=ax,
-            cax=cax,
-            orientation="horizontal",
-            ticklocation="bottom",
-            shrink=0.8,
-        )
+        print(f"Clipping completed {time.time()-begin} secs")
+        if contours:
+            clipped[0].plot.contour(
+                ax=ax,
+                colors=[contour_line_color],
+                linewidths=[contour_line_width],
+                levels=contour_levels,
+            )  # draw contour
 
-        imname_prefix = colname.split("_")[0]  # in case we have pSA_0.1 etc
-        try:
-            unit = IM(imname_prefix).get_unit()  # get the unit for this IM type
-        except KeyError:  # may not be a recognized IM type. No unit
-            unit_text = ""
-        else:
-            unit_text = f"({unit})"
+        if surface:
+            # render clipped surface
+            clipped[0].plot.pcolormesh(
+                ax=ax, cmap=cmap, alpha=surface_opacity, add_colorbar=False
+            )  # add custom colorbar below
 
-        cbar.set_label(f"{colname} {unit_text}", fontsize=colorbar_font_size)
+    if points:
+        geometry = [Point(xy) for xy in zip(xyv_df["lon"], xyv_df["lat"])]
+        geodata = gpd.GeoDataFrame(xyv_df, crs=crs, geometry=geometry)
+        geodata.plot(
+            "value", ax=ax, legend=False, markersize=point_size, cmap=cmap
+        )  # draw points, no default colorbar
+
+    # Place a custom colorbar
+    cax = ax.inset_axes([0.0, -0.1, 1, 0.05])
+    cNorm = ScalarMappable(
+        norm=Normalize(vmin=xyv_df["value"].min(), vmax=xyv_df["value"].max()),
+        cmap=cmap,
+    )
+    cbar = plt.colorbar(
+        mappable=cNorm,
+        ax=ax,
+        cax=cax,
+        orientation="horizontal",
+        ticklocation="bottom",
+        shrink=0.8,
+    )
+
+
+    cbar.set_label(f"t={timestamp}", fontsize=colorbar_font_size)
 
     if basemap:
         if basemap_path is not None:
@@ -707,7 +680,6 @@ def plot_column(
     ax.set_ybound(lower=min_lat, upper=max_lat)
 
     # Make sure file name doesn't have confusing dots.
-    colname_p = colname.replace(".", "p")
 
     # If image should be added to the map, do here
     # plot_image(ax, marker_png, 167,-44.0, 0.03) # Just an example
@@ -715,7 +687,7 @@ def plot_column(
     # Set the aspect as specified.
     ax.set_aspect(aspect)
     fig.tight_layout()
-    fig.savefig(outdir / f"{prefix}_{colname_p}.png")
+    fig.savefig(outdir / f"ts_{timestamp:05d}.png")
     plt.close(fig)
 
 
@@ -748,35 +720,7 @@ if __name__ == "__main__":
     out_dir = output_prefix.parent.resolve()
     out_dir.mkdir(exist_ok=True)
 
-    column_names = list(data_df.columns)
 
-    if args.has_component_column:  # Typical IM.csv
-        column_names.remove("component")
-        assert args.comp in set(
-            data_df.component
-        ), f"Specified component {args.comp} is unavailable in {args.data_csv}"
-        data_to_plot_df = data_df[
-            data_df.component == args.comp
-        ]  # select the specified component
-        print(f"Plotting component {args.comp}")
-    else:  # generic data CSV with each line
-        column_names = list(data_df.columns)
-        data_to_plot_df = data_df
-
-    columns_to_plot = []
-    if args.column is None:
-        columns_to_plot = column_names
-    else:
-        for colname in set(args.column):  # remove duplicates
-            if colname in column_names:
-                columns_to_plot.append(colname)
-            else:
-                print(f"Warning: No such column present: {colname}")
-    print(f"Columns to plot: {columns_to_plot}")
-
-    xyv_df = data_to_plot_df.join(stations, how="right")[
-        ["lon", "lat"] + columns_to_plot
-    ]  # joining 2 dataframes on index "station" name.
 
     coastlines_polygon = gpd.read_file(args.coastline)
 
@@ -795,8 +739,8 @@ if __name__ == "__main__":
         )
 
     pfn = partial(
-        plot_column,
-        xyv_df,
+        render_slice,
+        xyts,
         crs=crs,
         clip_with=coastlines_polygon.geometry.values,
         outdir=out_dir,
@@ -831,7 +775,7 @@ if __name__ == "__main__":
 
     # Parallel
     with Pool(args.nproc) as pool:
-        plot_properties = pool.map_async(pfn, columns_to_plot)
+        plot_properties = pool.map_async(pfn, list(range(xyts.nt)))
         plot_properties = plot_properties.get()
 
     # Serial
