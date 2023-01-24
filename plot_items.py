@@ -608,14 +608,18 @@ def plot_column(
 
     if categorical:
         uniq = list(set(xyv_df[colname]))
+        uniq.sort()
         cNorm = Normalize(vmin=0, vmax=len(uniq))
         scalarMap = ScalarMappable(norm=cNorm, cmap=cmap)
+        markers = ["o", "^", "s", "D","<",">","P","X","*"] # 9 different style markers available
         for i in range(len(uniq)):
             indx = xyv_df[colname] == uniq[i]
             ax.scatter(
                 xyv_df["lon"][indx],
                 xyv_df["lat"][indx],
                 s=point_size,
+                marker=markers[i % len(markers)], # if num of categories exceed that of markers, reuse markers
+                edgecolors="k",
                 color=scalarMap.to_rgba(i),
                 alpha=surface_opacity,
                 label=uniq[i],
@@ -691,6 +695,10 @@ def plot_column(
 
         cbar.set_label(f"{colname} {unit_text}", fontsize=colorbar_font_size)
 
+    # Crop to the specified region
+    ax.set_xbound(lower=min_lon, upper=max_lon)
+    ax.set_ybound(lower=min_lat, upper=max_lat)
+
     if basemap:
         if basemap_path is not None:
             cx.add_basemap(ax, crs=crs, source=basemap_path, zoom=8)  # add basemap
@@ -714,9 +722,7 @@ def plot_column(
     # Show Title
     plt.title(f"{title}", fontsize=title_font_size)
 
-    # Crop to the specified region
-    ax.set_xbound(lower=min_lon, upper=max_lon)
-    ax.set_ybound(lower=min_lat, upper=max_lat)
+
 
     # Make sure file name doesn't have confusing dots.
     colname_p = colname.replace(".", "p")
