@@ -20,11 +20,14 @@ import rasterio
 from rasterio.transform import Affine
 import rioxarray
 from shapely.geometry import Point
+from tempfile import mkdtemp
+
 import time
 
 from qcore.im import IM
 from qcore import srf, constants
 from qcore.xyts import XYTSFile
+from qcore.gmt import xyv_cpt_range
 
 script_dir = Path(__file__).parent.resolve()
 
@@ -83,6 +86,17 @@ DEFAULT_CITY_FONT_SIZE = 12
 # zorder : higher for upper layer
 LAYER_IMAGE = 3
 LAYER_SRF = 5
+
+# size of plotting area
+PAGE_WIDTH = 16
+PAGE_HEIGHT = 9
+# space around map for titles, tick labels and scales etc
+MARGIN_TOP = 1.0
+MARGIN_BOTTOM = 0.4
+MARGIN_LEFT = 1.0
+MARGIN_RIGHT = 1.7
+
+
 
 marker_png = script_dir / "marker.png"
 
@@ -714,12 +728,33 @@ if __name__ == "__main__":
 
 
     xyts = XYTSFile(args.xyts_file)
+    gmt_temp = mkdtemp()
+
+    pgv_file = "%s/PGV.bin" % (gmt_temp)
+    xyts.pgv(pgvout=pgv_file)
+    cpt_min = 0
+    cpt_inc, cpt_max = xyv_cpt_range(pgv_file)[1:3]
+
+    lowcut = cpt_max * 0.02
+    highcut = None
+    convergence_limit = cpt_inc * 0.2
+    corners = xyts.corners()
+    region = xyts.region()
+
+
+    ll_region = xyts.region(corners=corners)
+
+    map_width = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT
+    map_height = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM
 
     output_prefix = Path(args.output_prefix)
     basename = output_prefix.name
     out_dir = output_prefix.parent.resolve()
     out_dir.mkdir(exist_ok=True)
 
+    xyts.tslice_get(1, comp=-1)
+
+    column_names = list(xyts.columns)
 
 
     coastlines_polygon = gpd.read_file(args.coastline)
