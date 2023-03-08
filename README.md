@@ -99,8 +99,9 @@ GSHHS_f_L1.shp contains full resolution coastlines of most countries, and this c
 2. Create a new shapefile layer, give a name and choose "Polygon" for Geometry type.
 3. Right-click on the layer and select Toggle Editing. 
 4. Select Add Polygon Feature and draw the area covering the desired area.
-5. Vector > Geoprocessing tools > Clip. Select GSHHS_f_L1 layer as Input layer and the new layer as Output layer. 
-6. Export > Save Features as and save it as a ESRI Shapefile.
+5. Vector > Geoprocessing tools > Clip. Select GSHHS_f_L1 layer as Input layer and the new layer as Overlay layer. 
+6. If it complains about GSHHS_f_L1 has invalid geometry, Processing> Toolbox > Vector geometry > Check validity. Use GEOS method and extract Valid output. Try Clip again using Valid output as Inpuy layer.
+7. Export > Save Features as and save it as a ESRI Shapefile.
 
 
 city csv file is simply in this format.
